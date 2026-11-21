@@ -1,0 +1,102 @@
+{
+  "$schema": "https://facis.eu/schemas/fap-ldp-model.json",
+  "package": "app-store",
+  "version": "0.4.0",
+  "static": true,
+  "description": "App store v1 — catalogue de fonctionnalites + preferences (app-store-spec.md v0.4, Partie 1). Socle STATIQUE : deploye avec le serveur via le model.json de l'app, applique au boot par le noeud FAP-LDP (fap-ldp-spec §5). Ce qui est injecte a chaud (E11, model-injection-spec.md) concerne les features tierces, pas ce socle (L2).",
+  "pod_placeholder": "<pod>",
+
+  "tables": {
+    "app.features": {
+      "pk": "id",
+      "published": false,
+      "tombstone": "deleted_at",
+      "container": "https://<pod>/features/",
+      "iri_pattern": "https://<pod>/features/{slug}",
+      "iri_key": "slug",
+      "comment": "Catalogue (admin). IRI exposee = slug (decision B2, lookup slug→id cote PEP, CA-A7).",
+      "fields": {
+        "id":               { "type": "bigserial", "pk": true },
+        "slug":             { "type": "text", "not_null": true, "unique": true, "check_regex": "^[a-z][a-z0-9-]{1,62}$" },
+        "title_i18n":       { "type": "jsonb", "not_null": true, "default": "'{}'", "comment": "localise des la v1 {\"fr\": \"…\"} (§1.9.2)" },
+        "description_i18n": { "type": "jsonb", "not_null": true, "default": "'{}'" },
+        "icon":             { "type": "text", "not_null": true, "default": "'extension'", "comment": "Material Icons, fallback extension (§1.9.3)" },
+        "menu_order":       { "type": "int",  "not_null": true, "default": "0", "comment": "tri menu (menu_order, slug) (§1.9.1)" },
+        "component":        { "type": "text", "comment": "tag du custom element package (v1)" },
+        "route":            { "type": "text", "comment": "route Orbit associee" },
+        "role_min":         { "type": "text", "not_null": true, "default": "'all'",
+                              "check_in": ["all", "technicien", "gestionnaire", "admin"],
+                              "comment": "role minimal pour voir/activer la feature (filtrage menu + guard §1.4.1 ; la securite reste cote ACL/PDP)" },
+        "config_schema":    { "type": "jsonb", "not_null": true, "default": "'{\"fields\": []}'", "comment": "meta-schema §1.9.6" },
+        "default_enabled":  { "type": "boolean", "not_null": true, "default": "false", "comment": "aussi utilise si la cle manque dans les prefs (§1.9.4a)" },
+        "created_at":       { "type": "timestamptz", "not_null": true, "default": "now()" },
+        "updated_at":       { "type": "timestamptz", "not_null": true, "default": "now()" },
+        "deleted_at":       { "type": "timestamptz" }
+      },
+      "rls": {
+        "iri_expr": "'https://<pod>/features/' || slug",
+        "read":  "auth.can(iri, 'read')",
+        "write": "auth.can(iri, 'write')"
+      }
+    },
+
+    "app.prefs": {
+      "pk": "user_id",
+      "fk": { "user_id": "app.users(id) ON DELETE CASCADE" },
+      "published": false,
+      "tombstone": "deleted_at",
+      "container": "https://<pod>/prefs/",
+      "iri_pattern": "https://<pod>/prefs/{user_id}",
+      "comment": "Une ressource LDP par user : /prefs/<user_id>, colonne jsonb aplatie, PATCH atomique (decisions B1/B3). Body PATCH forme R1 : {\"prefs\": {\"<slug>\": {…}}}.",
+      "fields": {
+        "user_id":    { "type": "bigint", "pk": true, "comment": "owner, CASCADE RGPD (§1.9.5)" },
+        "prefs":      { "type": "jsonb", "not_null": true, "default": "'{}'", "comment": "{\"<slug>\": {\"enabled\": bool, \"config\": {…}}}" },
+        "created_at": { "type": "timestamptz", "not_null": true, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "not_null": true, "default": "now()" },
+        "deleted_at": { "type": "timestamptz" }
+      },
+      "rls": {
+        "iri_expr": "'https://<pod>/prefs/' || user_id",
+        "read":  "auth.can(iri, 'read')",
+        "write": "auth.can(iri, 'write')",
+        "comment": "owner-only ; autre user → ligne filtree → PEP rend 404 (§1.9.10, CA-A2)"
+      }
+    }
+  },
+
+  "acl": [
+    { "resource": "https://<pod>/features/", "subject": "foaf:Agent",  "modes": ["read"],             "inherited": true,
+      "comment": "membres du pod (contrat-cadre, claim org) ; externes arretes a l'etape 1 du PDP (published=false) — M2" },
+    { "resource": "https://<pod>/features/", "subject": "role:admin",  "modes": ["write", "control"], "inherited": true }
+  ],
+
+  "asset_mapping": [
+    { "container_uri": "https://<pod>/features/", "table": "app.features", "resource_iri_pattern": "https://<pod>/features/{slug}",     "published": false },
+    { "container_uri": "https://<pod>/prefs/",    "table": "app.prefs",    "resource_iri_pattern": "https://<pod>/prefs/{user_id}",     "published": false }
+  ],
+
+  "triggers": [
+    {
+      "name": "on_user_insert_app_store",
+      "table": "app.users",
+      "event": "AFTER INSERT",
+      "function_file": "sql/triggers/app_store_on_user_insert.sql",
+      "security_definer": true,
+      "comment": "prefs par defaut depuis app.features.default_enabled + ACL owner-webid (read/write/control) sur /prefs/<pk> + role:admin (§1.4.2, M2). SECURITY DEFINER car FORCE RLS filtre meme le owner."
+    },
+    {
+      "name": "on_feature_insert_app_store",
+      "table": "app.features",
+      "event": "AFTER INSERT",
+      "function_file": "sql/triggers/app_store_on_feature_insert.sql",
+      "security_definer": true,
+      "comment": "injecte la cle par defaut dans toutes les prefs existantes (§1.9.4b)"
+    }
+  ],
+
+  "migrations_one_shot": [
+    { "file": "sql/012_backfill_prefs.sql", "comment": "backfill prefs+ACL des users existants au deploiement (§1.9.4c), idempotent, a executer UNE SEULE FOIS a la main (role admin)" }
+  ],
+
+  "seed": "app-specific — fourni par l'app dans son model.json (contenu propose : spec/app-store-catalogue.md). Ce package ne livre AUCUN seed (app-store-spec §1.3)."
+}

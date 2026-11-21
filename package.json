@@ -1,0 +1,22 @@
+{
+  "name": "@facis/app-store",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "App store FAP/Startin'blox — catalogue de fonctionnalités activables, config par feature, menu dynamique (mécanisme uniquement, spec v0.4 Partie 1). Les composants features métier vivent dans @facis/app-features.",
+  "scripts": {
+    "test": "node --test tck/",
+    "test:unit": "node --test tck/logic.test.js tck/app-store-api.test.js tck/components.test.js",
+    "test:e2e": "node --test tck/ldp-contract.test.js"
+  },
+  "devDependencies": {
+    "happy-dom": "21.0.4"
+  },
+  "dependencies": {
+    "@lit/task": "1.0.3",
+    "lit": "3.3.3"
+  },
+  "peerDependencies": {
+    "@startinblox/core": "2.0.6"
+  }
+}
