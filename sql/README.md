@@ -1,41 +1,43 @@
-# Modèle de l'app store — source de vérité : `model/app-store.model.json`
+# App store model — source of truth: `model/app-store.model.json`
 
-Le modèle métier est **déclaratif** : `../model/app-store.model.json` (fragment
-`model.json`, appliqué **au boot par le nœud FAP-LDP** — fap-ldp-spec §5 : tables,
-triggers, RLS, `dsp.asset_mapping`, ACL initiales). On l'intègre dans le
-`config/model.json` de l'app (comme `examples/supervision/`).
+The business model is **declarative**: `../model/app-store.model.json` (`model.json`
+fragment, applied **at boot by the FAP-LDP node** — fap-ldp-spec §5: tables,
+triggers, RLS, `dsp.asset_mapping`, initial ACLs). You integrate it into the
+app's `config/model.json` (like `examples/supervision/`).
 
 ## Installation (v1)
 
 ```bash
-# 1. Intégrer model/app-store.model.json dans le config/model.json de l'app
-#    (le nœud l'applique au boot, de façon idempotente, APRÈS core/sql/00*.sql).
-# 2. Migration one-shot des users existants (seule étape manuelle, rôle admin) :
-psql -v ON_ERROR_STOP=1 -v pod_host=<host du pod> -f sql/012_backfill_prefs.sql
-# 3. Seed du catalogue : app-specific, dans le model.json de l'app
-#    (contenu proposé : ../spec/app-store-catalogue.md).
+# 1. Integrate model/app-store.model.json into the app's config/model.json
+#    (the node applies it at boot, idempotently, AFTER core/sql/00*.sql).
+# 2. One-shot migration of existing users (the only manual step, role admin):
+psql -v ON_ERROR_STOP=1 -v pod_host=<pod host> -f sql/012_backfill_prefs.sql
+# 3. Catalogue seed: app-specific, in the app's model.json
+#    (suggested content: ../spec/app-store-catalogue.md).
 ```
 
-## Contenu de sql/
+## Contents of sql/
 
-| Fichier | Rôle |
+| File | Role |
 |---|---|
-| `triggers/app_store_on_user_insert.sql` | corps plpgsql du trigger user→prefs/ACL (référencé par le JSON) |
-| `triggers/app_store_on_feature_insert.sql` | corps plpgsql du trigger feature→clé par défaut dans les prefs |
-| `010_features.sql`, `011_prefs.sql` | **DDL de référence généré depuis le JSON** — lecture/debug/drift uniquement, ne pas éditer ni appliquer à la main |
-| `012_backfill_prefs.sql` | **migration one-shot** (users existants au déploiement, §1.9.4c), idempotent, rôle `admin` |
-| `020_features_v2.sql` | colonnes v2 — **uniquement en v2** (jamais en v1, L3) |
+| `triggers/app_store_on_user_insert.sql` | plpgsql body of the user→prefs/ACL trigger (referenced by the JSON) |
+| `triggers/app_store_on_feature_insert.sql` | plpgsql body of the feature→default key in prefs trigger |
+| `010_features.sql`, `011_prefs.sql` | **REFERENCE DDL generated from the JSON** — read/debug/drift only, do not edit or apply by hand |
+| `012_backfill_prefs.sql` | **one-shot migration** (existing users at deployment, §1.9.4c), idempotent, role `admin` |
+| `020_features_v2.sql` | v2 columns — **v2 only** (never in v1, L3) |
+| `130_features_catalogue_v2.sql` | v2 catalogue seed (12 remote business features), generated — do not edit by hand |
+| `021_features_category.sql` | feature category (store section), backfill by slug, idempotent |
 
-Pourquoi un JSON et pas que du SQL : le socle `core/sql/00*.sql` de FAP-LDP ne
-contient que le générique (`auth.acl`, `app.versions`, triggers socle) ; le modèle
-métier est déclaré en JSON et traduit en DDL au boot par le nœud — idempotent,
-versionné, audité, et identique au DSL des packages injectés (E11,
-`model-injection-spec.md` annexe A). Le SQL ici n'est qu'une vue de référence
-(comme le « DDL de référence » de fap-ldp-spec §5.1).
+Why a JSON and not just SQL: the FAP-LDP base `core/sql/00*.sql` only contains the
+generic parts (`auth.acl`, `app.versions`, base triggers); the business model is
+declared in JSON and translated to DDL at boot by the node — idempotent,
+versioned, audited, and identical to the DSL of injected packages (E11,
+`model-injection-spec.md` annex A). The SQL here is only a reference view
+(like the "reference DDL" of fap-ldp-spec §5.1).
 
-Ressources LDP exposées (contrat §1.5) :
+Exposed LDP resources (contract §1.5):
 
-| Ressource | Lecture | Écriture |
+| Resource | Read | Write |
 |---|---|---|
-| `GET /features/` , `/features/<slug>` | tous les users authentifiés du pod | `admin` |
-| `GET/PATCH /prefs/<user_pk>` | propriétaire (+ `admin`) ; autre user → **404** | propriétaire (+ `admin`) |
+| `GET /features/`, `/features/<slug>` | all authenticated users of the pod | `admin` |
+| `GET/PATCH /prefs/<user_pk>` | owner (+ `admin`); another user → **404** | owner (+ `admin`) |

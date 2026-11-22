@@ -1,5 +1,5 @@
-// TCK — window.appStore : contrat PATCH (forme R1 §1.5), événement save (§1.9.9),
-// gestion 412, mePrefsIri (§1.9.12), isEnabled depuis le cache (§1.9.7).
+// TCK — window.appStore: PATCH contract (form R1 §1.5), save event (§1.9.9),
+// 412 handling, mePrefsIri (§1.9.12), isEnabled from the cache (§1.9.7).
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { setupDom } from './helpers/dom.js';
@@ -21,7 +21,7 @@ const FEATURES = {
 };
 const PREFS = { '@id': `${POD}/prefs/7`, prefs: { 'building-map': { enabled: true, config: {} } } };
 
-// fetchAuthn mock : sert le catalogue + les prefs, journalise les PATCH.
+// fetchAuthn mock: serves the catalogue + prefs, logs the PATCHes.
 function makeFetch(calls, { patchStatus = 200, patchBody = null, etag = '"v1"' } = {}) {
   return async (url, init = {}) => {
     const u = String(url);
@@ -45,25 +45,25 @@ before(async () => {
   AppStoreConflictError = mod.AppStoreConflictError;
 });
 
-test('§1.9.12 mePrefsIri : configure({getWebid, podUrl}) → /prefs/<pk> ; hors pod → null', () => {
+test('§1.9.12 mePrefsIri: configure({getWebid, podUrl}) → /prefs/<pk>; outside the pod → null', () => {
   assert.equal(appStore.configure({ getWebid: () => `${POD}/users/7`, podUrl: POD }), '/prefs/7');
   assert.equal(appStore.mePrefsIri(), '/prefs/7');
   appStore.configure({ getWebid: () => 'https://other.test/users/1', podUrl: POD });
-  assert.equal(appStore.mePrefsIri(), null); // webid hors pod interdit en v1
+  assert.equal(appStore.mePrefsIri(), null); // webid outside the pod forbidden in v1
   appStore.configure({ getWebid: () => `${POD}/users/7`, podUrl: POD });
 });
 
-test('refresh charge catalogue + prefs ; isEnabled lit le cache (§1.9.7, clé absente = default)', async () => {
+test('refresh loads catalogue + prefs; isEnabled reads the cache (§1.9.7, key absent = default)', async () => {
   const calls = [];
   window.sibStore = { fetchAuthn: makeFetch(calls) };
   await appStore.refresh();
   assert.equal(appStore.getFeature('building-map').route, '/map');
   assert.equal(appStore.isEnabled('building-map'), true);  // pref enabled=true
-  assert.equal(appStore.isEnabled('energy-chart'), false); // clé absente → default_enabled=false
-  assert.equal(appStore.isEnabled('inconnu'), false);      // feature inconnue → false
+  assert.equal(appStore.isEnabled('energy-chart'), false); // key absent → default_enabled=false
+  assert.equal(appStore.isEnabled('unknown'), false);      // unknown feature → false
 });
 
-test('CA-A2 patchPrefs : PATCH merge-patch forme R1 + If-Match + événement save + read-after-write', async () => {
+test('CA-A2 patchPrefs: PATCH merge-patch form R1 + If-Match + save event + read-after-write', async () => {
   const calls = [];
   window.sibStore = { fetchAuthn: makeFetch(calls) };
   await appStore.refresh();
@@ -74,23 +74,23 @@ test('CA-A2 patchPrefs : PATCH merge-patch forme R1 + If-Match + événement sav
   await appStore.patchPrefs({ 'building-map': { enabled: false } });
 
   const patch = calls.find(([m, u]) => m === 'PATCH' && u === '/prefs/7');
-  assert.ok(patch, 'PATCH émis sur /prefs/7');
+  assert.ok(patch, 'PATCH emitted on /prefs/7');
   const [, , init] = patch;
   assert.equal(init.headers['content-type'], 'application/merge-patch+json');
-  assert.equal(init.headers['if-match'], '"v1"'); // ETag du GET précédent
-  // forme R1 §1.5 : body {"prefs": {…}} — PAS de slug à la racine.
-  // Le serveur REMPLACE la colonne jsonb entière → read-modify-write : body =
-  // objet complet fusionné (merge par slug : la config existante est préservée).
+  assert.equal(init.headers['if-match'], '"v1"'); // ETag of the previous GET
+  // form R1 §1.5: body {"prefs": {…}} — NO slug at the root.
+  // The server REPLACES the whole jsonb column → read-modify-write: body =
+  // complete merged object (merge by slug: the existing config is preserved).
   assert.deepEqual(JSON.parse(init.body), { prefs: { 'building-map': { config: {}, enabled: false } } });
 
-  // read-after-write : la réponse PATCH met à jour le cache
+  // read-after-write: the PATCH response updates the cache
   assert.equal(appStore.isEnabled('building-map'), false);
-  // §1.9.9 : save dispatché avec l'@id des prefs
+  // §1.9.9: save dispatched with the prefs' @id
   assert.equal(saves.length, 1);
   assert.equal(saves[0].resource['@id'], `${POD}/prefs/7`);
 });
 
-test('§1.9.9 — 412 : prefs rechargées + AppStoreConflictError', async () => {
+test('§1.9.9 — 412: prefs reloaded + AppStoreConflictError', async () => {
   const calls = [];
   let patchCount = 0;
   const fetchMock = async (url, init = {}) => {
@@ -112,10 +112,10 @@ test('§1.9.9 — 412 : prefs rechargées + AppStoreConflictError', async () => 
 
   await assert.rejects(() => appStore.patchPrefs({ 'energy-chart': { enabled: true } }), AppStoreConflictError);
   const getsAfter = calls.filter(([m]) => m === 'GET').length;
-  assert.ok(getsAfter > getsBefore, 'les prefs sont rechargées après le 412');
+  assert.ok(getsAfter > getsBefore, 'prefs are reloaded after the 412');
 });
 
-test('CA-A4 guard : requestNavigation vers une route de feature désactivée → redirect /', async () => {
+test('CA-A4 guard: requestNavigation to a route of a disabled feature → redirect /', async () => {
   const calls = [];
   window.sibStore = { fetchAuthn: makeFetch(calls) };
   await appStore.refresh();
@@ -124,15 +124,15 @@ test('CA-A4 guard : requestNavigation vers une route de feature désactivée →
   const navs = [];
   document.addEventListener('requestNavigation', (e) => navs.push(e.detail?.resource ?? e.detail?.route));
 
-  // energy-chart (route /chart) est désactivée → navigation interceptée
+  // energy-chart (route /chart) is disabled → navigation intercepted
   document.dispatchEvent(new CustomEvent('requestNavigation', { detail: { route: 'chart', resource: '/chart' }, cancelable: true }));
   await new Promise((r) => setTimeout(r, 0));
-  assert.ok(navs.includes('/'), `redirect / émis (navs=${JSON.stringify(navs)})`);
+  assert.ok(navs.includes('/'), `redirect / emitted (navs=${JSON.stringify(navs)})`);
 
-  // building-map (route /map) est activée → navigation laissée passer
+  // building-map (route /map) is enabled → navigation allowed through
   navs.length = 0;
   const ev = new CustomEvent('requestNavigation', { detail: { route: 'map', resource: '/map' }, cancelable: true });
   document.dispatchEvent(ev);
   await new Promise((r) => setTimeout(r, 0));
-  assert.ok(!ev.defaultPrevented, 'navigation non bloquée pour une feature active');
+  assert.ok(!ev.defaultPrevented, 'navigation not blocked for an enabled feature');
 });

@@ -1,7 +1,7 @@
--- Fonction trigger du socle app-store — référencée par model/app-store.model.json
--- (triggers[1]). À l'ajout d'une feature par l'admin, injecte la clé par défaut
--- dans toutes les prefs existantes (app-store-spec §1.9.4b).
--- SECURITY DEFINER : idem (écriture dans app.prefs malgré FORCE RLS).
+-- app-store base trigger function — referenced by model/app-store.model.json
+-- (triggers[1]). When the admin adds a feature, injects the default key
+-- into all existing prefs (app-store-spec §1.9.4b).
+-- SECURITY DEFINER: same (write into app.prefs despite FORCE RLS).
 CREATE OR REPLACE FUNCTION app.app_store_on_feature_insert() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN

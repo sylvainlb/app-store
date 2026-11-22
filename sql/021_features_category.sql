@@ -1,17 +1,17 @@
 -- ============================================================================
--- App store — 021_features_category.sql : catégorie (rayon) des features du
--- catalogue, pour organiser <app-store> en sections + filtres (spec §1.6.2
--- révisée : « le store est organisé par cas d'usage, le menu reste plat »).
+-- App store — 021_features_category.sql: category (section) of the catalogue
+-- features, to organize <app-store> into sections + filters (revised spec §1.6.2:
+-- "the store is organized by use case, the menu stays flat").
 --
--- Rôle : admin. Idempotent : rejoué au boot (comme 020/130).
--- La catégorie est un simple texte nullable (pas de table de référence) :
--- l'admin peut la modifier par PATCH /features/<slug> (modale admin du store).
--- Exposée en LDP comme app_features:category, lue par <app-store>.
+-- Role: admin. Idempotent: replayed at boot (like 020/130).
+-- The category is a simple nullable text (no reference table):
+-- the admin can change it via PATCH /features/<slug> (store admin modal).
+-- Exposed in LDP as app_features:category, read by <app-store>.
 -- ============================================================================
 
 ALTER TABLE app.features ADD COLUMN IF NOT EXISTS category text;
 
--- Backfill par slug (ne touche que les NULL → idempotent). Valeurs proposées :
+-- Backfill by slug (only touches NULLs → idempotent). Suggested values:
 UPDATE app.features SET category = 'supervision'
   WHERE category IS NULL AND slug IN
   ('dashboard', 'building-detail', 'anomalies', 'alert-rules', 'sla-dashboard', 'weather-correlation');
@@ -30,6 +30,6 @@ UPDATE app.features SET category = 'compliance'
 
 UPDATE app.features SET category = 'tools'
   WHERE category IS NULL AND slug IN
-  ('ai-assistant', 'demo_meteo', 'admin', 'store');
+  ('ai-assistant', 'demo_weather', 'admin', 'store');
 
 CREATE INDEX IF NOT EXISTS features_category_idx ON app.features (category);

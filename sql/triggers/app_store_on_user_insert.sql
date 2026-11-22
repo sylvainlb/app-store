@@ -1,14 +1,14 @@
--- Fonction trigger du socle app-store — référencée par model/app-store.model.json
--- (triggers[0]). Corps plpgsql : la logique de trigger ne peut pas être purement
--- déclarative ; le JSON déclare la table/l'événement/le fichier, le SQL porte le corps.
+-- app-store base trigger function — referenced by model/app-store.model.json
+-- (triggers[0]). plpgsql body: trigger logic cannot be purely
+-- declarative; the JSON declares the table/event/file, the SQL carries the body.
 --
--- Trigger à la création d'un user (app-store-spec §1.4.2) : prefs par défaut depuis
--- app.features.default_enabled ET ACL owner-webid (read/write/control) sur
+-- Trigger on user creation (app-store-spec §1.4.2): default prefs from
+-- app.features.default_enabled AND owner-webid ACL (read/write/control) on
 -- /prefs/<pk> + role:admin (M2).
--- SECURITY DEFINER : FORCE ROW LEVEL SECURITY filtre même le owner (fap-ldp-spec
--- §7.2) — la fonction est créée par le rôle admin (BYPASSRLS).
--- Le host du pod est dérivé du webid (https://<host>/users/<pk>) : pas de
--- substitution de placeholder possible dans un corps de fonction.
+-- SECURITY DEFINER: FORCE ROW LEVEL SECURITY filters even the owner (fap-ldp-spec
+-- §7.2) — the function is created by the admin role (BYPASSRLS).
+-- The pod host is derived from the webid (https://<host>/users/<pk>): no
+-- placeholder substitution is possible inside a function body.
 CREATE OR REPLACE FUNCTION app.app_store_on_user_insert() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE

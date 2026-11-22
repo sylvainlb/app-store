@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "App store FAP/Startin'blox — catalogue de fonctionnalités activables, config par feature, menu dynamique (mécanisme uniquement, spec v0.4 Partie 1). Les composants features métier vivent dans @facis/app-features.",
+  "description": "FAP/Startin'blox app store — catalogue of toggleable features, per-feature config, dynamic menu (mechanism only, spec v0.4 Part 1). Business feature components live in @facis/app-features.",
   "scripts": {
     "test": "node --test tck/",
     "test:unit": "node --test tck/logic.test.js tck/app-store-api.test.js tck/components.test.js",
