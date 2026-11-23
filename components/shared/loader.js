@@ -100,6 +100,12 @@ export async function loadRemoteModule(feature, deps = {}) {
   const buf = new TextEncoder().encode(src).buffer;
   await checkSri(buf, sri); // CA-A5: throws before any import
 
+  // tag already registered (e.g. the same tag embedded in the dashboard bundle):
+  // the sri is verified, but no re-import — the element is already defined
+  if (tag && typeof customElements !== 'undefined' && customElements.get(tag)) {
+    return { alreadyRegistered: true, module: null, src, blobUrl: null };
+  }
+
   // dynamic import() via blob URL (the integrity attribute does not apply to import())
   const blobUrl = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
   const importFn = deps.importFn ?? ((u) => import(/* @vite-ignore */ u));

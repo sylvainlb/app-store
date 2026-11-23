@@ -170,6 +170,11 @@ test('v2 UI: invalid sri → installation refused, no prefs PATCH (CA-A5)', asyn
   // the loader cache (same cdn_url + same sri = legitimate hit) is evicted to force the re-fetch
   const { evictModule } = await import('../components/shared/loader.js');
   evictModule(FEATURES['/features/pv-selfconsumption'].cdn_url);
+  // the tag was registered by the previous test's real import; hide it so this test exercises
+  // the FETCH path (the alreadyRegistered short-circuit is covered in app-supervision's suite)
+  const g = globalThis.customElements;
+  const origGet = g.get.bind(g);
+  g.get = (t) => (t === 'pv-gauge' ? undefined : origGet(t));
   window.__appStoreLoaderDeps = {
     fetchFn: async () => ({ ok: true, status: 200, text: async () => MODULE + '// changed' }), // bytes ≠ sri
     importFn: async () => ({}),
@@ -185,4 +190,5 @@ test('v2 UI: invalid sri → installation refused, no prefs PATCH (CA-A5)', asyn
   assert.equal(calls.filter(([m]) => m === 'PATCH').length, 0, 'CA-A5: no PATCH if the sri does not match');
   assert.ok(store.toast.includes('refused'), `refusal toast (got: ${store.toast})`);
   window.__appStoreLoaderDeps = undefined;
+  g.get = origGet;
 });
