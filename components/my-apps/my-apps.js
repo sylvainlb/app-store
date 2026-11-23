@@ -19,15 +19,17 @@ import { unwrapComponentResource, componentKind, componentLabel, componentEditLi
 
 const STR = {
   en: {
-    title: 'My apps', new: 'New component', newUi: 'UI component', newAi: 'AI component',
+    title: 'My apps', newUi: '+ New UI component', newAi: '+ New AI component',
     colName: 'Component', colType: 'Type', colSource: 'Source', colVersion: 'Version', colActions: '',
-    typeUi: 'UI', typeAi: 'AI', edit: 'Edit', empty: 'No component yet — create your first one.',
+    typeUi: 'UI', typeAi: 'AI', edit: 'Edit', empty: 'No component yet.',
+    hint: 'An AI component is published here, then embedded as an AI block inside a UI component.',
     loadError: 'Cannot read /components/ (published components container).',
   },
   fr: {
-    title: 'Mes apps', new: 'Nouveau composant', newUi: 'Composant UI', newAi: 'Composant IA',
+    title: 'Mes apps', newUi: '+ Nouveau composant UI', newAi: '+ Nouveau composant IA',
     colName: 'Composant', colType: 'Type', colSource: 'Source', colVersion: 'Version', colActions: '',
-    typeUi: 'UI', typeAi: 'IA', edit: 'Modifier', empty: 'Aucun composant — créez le premier.',
+    typeUi: 'UI', typeAi: 'IA', edit: 'Modifier', empty: 'Aucun composant pour l\'instant.',
+    hint: 'Un composant IA se publie ici, puis s\'intègre comme bloc IA dans un composant UI.',
     loadError: 'Lecture de /components/ impossible (conteneur des composants publiés).',
   },
 };
@@ -44,7 +46,7 @@ export class MyApps extends OrbitComponent {
     .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
     .head h1 { margin: 0; font-size: 1.25rem; }
     .head .new { display: flex; gap: 8px; align-items: center; }
-    .head select { width: auto; }
+    .hint { margin: -8px 0 14px; font-size: .82rem; color: var(--muted); }
     table { width: 100%; }
     td.src { font-family: ui-monospace, monospace; font-size: .78rem; color: var(--muted); word-break: break-all; }
     .badge.ui { background: #e0e7ff; color: #3730a3; }
@@ -91,13 +93,11 @@ export class MyApps extends OrbitComponent {
       <div class="head">
         <h1>${this.t('title')}</h1>
         <div class="new">
-          <select id="new-kind" @change=${(e) => this._new(e.target.value)}>
-            <option value="" selected disabled>${this.t('new')}…</option>
-            <option value="ui">${this.t('newUi')}</option>
-            <option value="ai">${this.t('newAi')}</option>
-          </select>
+          <button class="secondary" data-kind="ui" @click=${() => this._new('ui')}>${this.t('newUi')}</button>
+          <button data-kind="ai" @click=${() => this._new('ai')}>${this.t('newAi')}</button>
         </div>
       </div>
+      <p class="hint">${this.t('hint')}</p>
       ${this.entries.length === 0 ? html`<div class="empty">${this.t('empty')}</div>` : html`
       <table>
         <thead><tr>
