@@ -254,12 +254,39 @@ export function installedEntry(prefsObj, slug) {
   return prefsObj?.[slug] ?? {};
 }
 
+// v0.5 — two-stage store (spec v0.5 §1.4.3, J8): stage discriminant on the catalogue line.
+// 'code' (default, the 12 existing features) = distant SRI bundle, unchanged.
+// 'declarative' = JSON-LD document interpreted by <cmp-runtime> (chantier 3).
+export function isDeclarative(feature) {
+  return get(feature, 'stage') === 'declarative';
+}
+
 // CA-A5: a packaged feature is always "installed" (present at build time);
 // a remote feature is only if installed_version + installed_sri are set.
+// v0.5: a DECLARATIVE feature is installed only if the document hash was verified
+// and recorded (installed_version = document_iri, installed_sri = document hash).
 export function isInstalled(feature, prefsObj) {
+  if (isDeclarative(feature)) {
+    const e = installedEntry(prefsObj, get(feature, 'slug'));
+    return !!(e.installed_version && e.installed_sri);
+  }
   if (!isDistant(feature)) return true;
   const e = installedEntry(prefsObj, get(feature, 'slug'));
   return !!(e.installed_version && e.installed_sri);
+}
+
+// v0.5 §1.4.3 — routes of INSTALLED declarative features, merged into the host shell's
+// route table at boot (orbit.json stays untouched for the code stage; CA-A8).
+export function declarativeRoutes(catalogue, prefsObj) {
+  return (catalogue ?? [])
+    .filter((f) => isDeclarative(f) && featureEnabled(prefsObj, f))
+    .map((f) => ({
+      name: get(f, 'slug'),
+      path: get(f, 'route'),
+      roles: [get(f, 'role_min') ?? 'all'],
+      menu: get(f, 'in_menu') ?? true,
+      dynamic: true,
+    }));
 }
 
 // "x.y.z" version comparison (dotted integers): -1 / 0 / 1.

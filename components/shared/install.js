@@ -4,8 +4,17 @@
 // Uses window.appStore (app-store-api.js) for prefs + catalogue, and
 // loader.js for SRI verification before import. User confirmation
 // is injectable (confirmFn) to stay testable.
-import { get as getField, isDistant, installPatch, uninstallPatch, upgradeAvailable, installedEntry } from './logic.js';
+import { get as getField, isDistant, isDeclarative, installPatch, uninstallPatch, upgradeAvailable, installedEntry } from './logic.js';
 import { loadRemoteModule, evictModule, SriMismatchError } from './loader.js';
+import { documentHash } from './hash.js';
+
+// v0.5 — mismatch of the declarative document hash (analogue of SriMismatchError).
+export class DocumentHashMismatchError extends Error {
+  constructor(slug, expected, actual) {
+    super(`document hash mismatch for ${slug}: catalogue ${expected} ≠ document ${actual} — rendering refused`);
+    this.name = 'DocumentHashMismatchError';
+  }
+}
 
 /**
  * Activates a feature (packaged or remote).
@@ -17,6 +26,23 @@ import { loadRemoteModule, evictModule, SriMismatchError } from './loader.js';
  */
 export async function installFeature(appStoreApi, feature, { confirmFn, fetchFn, importFn } = {}) {
   const slug = getField(feature, 'slug');
+  // v0.5 §1.4.3 — declarative stage: no bundle. Fetch the versioned document, verify its
+  // sha384 (content, @id excluded) against the catalogue sri BEFORE anything is recorded,
+  // then record prefs (installed_version = document_iri, installed_sri = hash).
+  if (isDeclarative(feature)) {
+    const documentIri = getField(feature, 'document_iri');
+    const expected = getField(feature, 'sri');
+    const ok = confirmFn ? await confirmFn({ documentIri, sri: expected, slug, stage: 'declarative' }) : true;
+    if (!ok) return { installed: false };
+    const fetcher = fetchFn ?? ((u, i) => fetch(u, i));
+    const res = await fetcher(documentIri);
+    if (!res?.ok) throw new Error(`component document not found: ${documentIri} (${res?.status})`);
+    const doc = await res.json();
+    const actual = await documentHash(doc);
+    if (actual !== expected) throw new DocumentHashMismatchError(slug, expected, actual);
+    await appStoreApi.patchPrefs(installPatch(slug, documentIri, actual));
+    return { installed: true, version: documentIri, sri: actual };
+  }
   if (!isDistant(feature)) {
     await appStoreApi.patchPrefs({ [slug]: { enabled: true } });
     return { installed: true };

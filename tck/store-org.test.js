@@ -15,11 +15,13 @@ const FEATURES = {
     { '@id': '/features/tickets' },
     { '@id': '/features/pv-selfconsumption' },
     { '@id': '/features/loose' },
+    { '@id': '/features/store' },
   ] },
   '/features/dashboard': { '@id': '/features/dashboard', slug: 'dashboard', title_i18n: { en: 'Dashboard', fr: 'Tableau de bord' }, description_i18n: { en: 'Overview of the site.', fr: 'Vue d\'ensemble du site.' }, icon: 'dashboard', menu_order: 0, route: '/', category: 'supervision', default_enabled: true, component: 'building-map' },
   '/features/tickets': { '@id': '/features/tickets', slug: 'tickets', title_i18n: { en: 'Tickets', fr: 'Tickets' }, description_i18n: { en: 'Anomaly tickets.', fr: 'Tickets d\'anomalie.' }, icon: 'confirmation_number', menu_order: 10, route: '/tickets', category: 'operations', default_enabled: false },
   '/features/pv-selfconsumption': { '@id': '/features/pv-selfconsumption', slug: 'pv-selfconsumption', title_i18n: { en: 'PV self-consumption', fr: 'Autoconsommation PV' }, description_i18n: { en: 'PV self-consumption rate.', fr: 'Taux d\'autoconsommation PV.' }, icon: 'solar_power', menu_order: 20, route: '/pv', category: 'energy', default_enabled: false, npm_package: '@facis/app-features', version: '0.1.0', cdn_url: '/features-dist/pv-selfconsumption.js', sri: 'sha384-AAAA', tag: 'pv-gauge' },
   '/features/loose': { '@id': '/features/loose', slug: 'loose', title_i18n: { en: 'Loose feature', fr: 'Feature orpheline' }, icon: 'extension', menu_order: 30, route: '/loose', default_enabled: false }, // no category
+  '/features/store': { '@id': '/features/store', slug: 'store', title_i18n: { en: 'App store', fr: 'App store' }, icon: 'storefront', menu_order: 8, route: '/store', category: 'tools', default_enabled: true, in_menu: false }, // tool: never listed inside the store itself
 };
 const PREFS = { '@id': `${POD}/prefs/7`, prefs: { dashboard: { enabled: true } } };
 
@@ -65,14 +67,17 @@ test('store organized in sections by category, chips "All" + one per category wi
   assert.deepEqual(sections.map((s) => s.querySelector('h2').textContent), ['Supervision', 'Operations', 'Energy & optimization', 'Other']);
   assert.equal(sections[0].querySelectorAll('.feature').length, 1);
 
-  const chips = [...store.renderRoot.querySelectorAll('.chip')];
+  const chips = [...store.renderRoot.querySelectorAll('.chips:not(.stages) .chip')];
   assert.deepEqual(chips.map((c) => c.textContent), ['All (4)', 'Supervision (1)', 'Operations (1)', 'Energy & optimization (1)', 'Other (1)']);
   assert.equal(chips[0].classList.contains('on'), true, '"All" chip active by default');
+  // the store itself (in_menu=false) must not appear inside the store
+  assert.ok(!cardSlugs(store).includes('App store'), 'in_menu=false → not listed in /store');
+  assert.equal(store.renderRoot.querySelectorAll('.feature').length, 4, '4 features listed (store excluded)');
 });
 
 test('filter chip: shows only the chosen category; "All" restores everything', async () => {
   const store = await mountStore();
-  const chips = [...store.renderRoot.querySelectorAll('.chip')];
+  const chips = [...store.renderRoot.querySelectorAll('.chips:not(.stages) .chip')];
   chips.find((c) => c.textContent.startsWith('Energy')).click();
   await tick(store);
   assert.deepEqual(cardSlugs(store), ['PV self-consumption']);
@@ -104,7 +109,7 @@ test('text search: filters cards on title/slug/description, empty state if nothi
 
 test('search + chip combined: intersection of the two filters', async () => {
   const store = await mountStore();
-  const chips = [...store.renderRoot.querySelectorAll('.chip')];
+  const chips = [...store.renderRoot.querySelectorAll('.chips:not(.stages) .chip')];
   chips.find((c) => c.textContent.startsWith('Supervision')).click();
   await tick(store);
   const search = store.renderRoot.querySelector('input.search');

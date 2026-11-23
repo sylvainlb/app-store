@@ -4,8 +4,11 @@ Reusable component allowing a FAP/Startin'blox application to offer a **catalogu
 features** that the user enables or not, with **per-feature configuration**, and a
 **menu generated dynamically** from the user configuration.
 
-- **Version**: 0.4 — document in **two parts**: Part 1 = v1 (to implement, details
-  settled in §1.9), Part 2 = v2 (specified, not a priority)
+- **Version**: 0.5 — document in **two parts**: Part 1 = v1 (to implement, details
+  settled in §1.9), Part 2 = v2 (specified, not a priority). **v0.5 (J8, chantier 3
+  `app-ui-component-editor` ratified)**: two-stage store — adds the `stage` discriminant
+  column and the declarative-stage catalogue line (§1.4.3), the `/components/` container
+  and `POST /features/` (§1.4.1). The code stage is byte-identical to v0.4 (CA-A8).
 - **Separate project: yes** — independent repository/package, installable in any FAP/SIB app
 - **References**:
   - `supervision-energetique-front-technique.md` (§7 components, §13 decisions)
@@ -105,15 +108,58 @@ in the data space).
 | `config_schema` | jsonb | meta-schema §1.9.6 |
 | `default_enabled` | bool | default state (also used if the key is missing from prefs) |
 | `category` | text NULL | **store section** (migration `021_features_category.sql`): `supervision` \\| `operations` \\| `energy` \\| `compliance` \\| `tools` (seeded values; any other value = section named as-is; NULL = « Other »). Organizes `<app-store>` into sections + filters (§1.6.2); **no effect on the menu** (stays flat) nor on security (ACL/PDP). Modifiable by the admin via PATCH `/features/<slug>` |
+| `stage` | text NOT NULL DEFAULT 'code' CHECK (stage IN ('code','declarative')) | **v0.5 — two-stage discriminant** (migration `022_features_stage.sql`, J8). `code` = distant SRI bundle (Part 2, unchanged); `declarative` = JSON-LD component document interpreted by the runtime (chantier 3). Existing rows keep `code` by default — zero regression (CA-A8). Exposed in LDP as `app_features:stage` |
+| `document_iri` | text NULL | **v0.5 — declarative stage only**: IRI of the pinned, versioned component document (ratified J8: dedicated column, not `config_schema`). NULL on code stage. Exposed as `app_features:document_iri` |
 
 LDP: container `https://<pod>/features/`, resources `/features/<slug>` — **custom**
 `resource_iri_pattern` `/features/<slug>` set in `dsp.asset_mapping` (the PEP maps any named
-placeholder onto its column: `pkWhere = <param> = $n`); no PEP change, covered by CA-A7. In v1 no
-`POST /features/` (admin = metadata only, §1.9.8): the catalogue is populated by the seed.
+placeholder onto its column: `pkWhere = <param> = $n`); no PEP change, covered by CA-A7.
+In v1 no `POST /features/` (admin = metadata only, §1.9.8): the catalogue is populated by the seed.
+**v0.5 (J8)**: `POST /features/` is opened to `admin` for **declarative-stage rows only**
+(publication channel of chantier 3, F1): body = the catalogue line of §1.4.3 (route validated
+unique and reserved, `document_iri`, `sri` = sha384 of the canonical document content — see
+§1.4.3). Code-stage rows are still seed-only / PATCH-metadata-only.
 Read: all authenticated users of the pod; write: `admin`.
 **ACL seed (M2)**: `foaf:Agent` + `inherited=true` in `read` on `/features/` (externals are anyway
 stopped at step 1 of the PDP, container `published=false`); `role:admin` in `write` on
 `/features/`.
+
+### 1.4.3 Two-stage store (v0.5 — J8, chantier 3 `app-ui-component-editor`)
+
+Ratified decisions (proposals in `app-ui-editor/spec/j8-ratification.md`, accepted as-is):
+
+- **Discriminant**: `app.features.stage` (`code` | `declarative`), default `code` — the 12 existing
+  features are untouched (CA-A8). Store UI sections = `category` × `stage` (F4 of the chantier 3 spec).
+- **Declarative catalogue line (F6)**: `stage='declarative'`, `slug`, dedicated `route` (validated
+  unique/reserved), `document_iri` (dedicated column), `sri` = **sha384 of the canonical JSON-LD
+  document content, top-level `@id` excluded** (identity is carried by the versioned resource IRI;
+  discovered by TCK — hashing `@id` would change the hash at each storage), `component` =
+  `cmp-runtime` (the single runtime tag, R3.2, packaged in the host app like `<app-store>`),
+  `role_min`, `title_i18n`/`description_i18n` (EN pivot), `category`, `menu_order`,
+  `default_enabled=false`.
+- **Document container**: `/components/` — resources are the versioned component documents
+  (same `app.versions` regime as any `app.*` resource). ACL: `read` = `foaf:Agent` inherited,
+  `write` = `role:admin`. Readable by every authenticated user (the document is subject to the
+  existing ACL + cache, R3.2); integrity verified client-side before each mount.
+- **Install branch on `stage`** (verified against the host code — `isDistant` = `cdn_url`+`tag`,
+  so the SRI/`MissingSriError` path applies to code-stage bundles only):
+  - `code` → **strictly identical to v0.4**: distant bundle, SRI verified before import, `installed_sri`
+    in prefs (Part 2, CA-A5). No change whatsoever (CA-A8).
+  - `declarative` → no bundle: fetch `document_iri`, compute sha384 of the canonical content
+    (`@id` excluded), compare with the catalogue `sri` **before each mount** (analogue of the
+    `<dynamic-feature>` SRI re-check); mismatch → rendering refused with an explicit message
+    (`DocumentHashMismatchError`). At install, the hash is recorded in prefs as `installed_sri`
+    (equivalent of the code stage), `installed_version` = the document IRI.
+- **Routing (host shell)**: `matchPath` only knows the static `orbit.json` routes and `<app-menu>`
+  only shows features whose route exists there (`routeExists`). At boot, the shell merges into its
+  route table the `app.features` rows with `stage='declarative'` installed in the current prefs
+  (route + `role_min` from the catalogue); existing guards and mounting then apply unchanged.
+  Additive: code-stage routes stay in `orbit.json`, untouched.
+- **Volumetry threshold (R4.1 of the chantier 3 spec)**: ratified at **1000 resources** per
+  container — beyond that, the runtime shows a volumetry warning (LDP-only reading: the whole
+  container is loaded in one read; sort/filter/pagination are client-side).
+- **Publication right**: v1 = `admin` only (the business editor prepares, the admin publishes via
+  `POST /features/`); delegation to a business role is a v2 option.
 
 ### 1.4.2 Preferences — `app.prefs` (one row per user)
 | Column | Type | Role |
@@ -181,7 +227,9 @@ injects the default key into all existing prefs.
 ### 1.6.3 Orbit integration (v1)
 All features are **declared at build time** in `orbit.json` (routes + components, pinned npm,
 SRI at build). The app store only shows/hides/configures them — no dynamic component
-registration in v1.
+registration in v1. **v0.5**: additionally, at boot the shell merges the routes of
+`stage='declarative'` catalogue rows installed in the current prefs into its route table
+(§1.4.3) — mounted component = the `cmp-runtime` tag parametrized by `document_iri`.
 
 ## 1.7 Security (v1)
 
@@ -201,6 +249,10 @@ registration in v1.
 - CA-A4: route of a disabled feature → redirect `/` (shell guard + mixin).
 - CA-A7: `GET`/`PATCH`/`DELETE /features/<slug>` resolved via the custom pattern `/features/<slug>`
   (`slug` column, not the PK) — proven by a TCK test.
+- CA-A8 (v0.5): after adding the `stage` column (default `code`), the 12 existing features install
+  and run with **zero modification** of the current channel — SRI bundle included; the discriminant
+  branch leaves the code path byte-identical. Proven by replaying the existing TCK plus a
+  declarative-vs-code branch test.
 
 ## 1.9 Settled details (reviewed before component dev)
 

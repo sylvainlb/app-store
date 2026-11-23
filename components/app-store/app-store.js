@@ -49,6 +49,7 @@ export class AppStore extends OrbitComponent {
     installing: { type: Boolean, attribute: false },    // install in progress (fetch + SRI check)
     query: { type: String },                            // store text search
     activeCat: { type: String, attribute: false },      // category filter ('all' = all)
+    activeStage: { type: String, attribute: false },    // v0.5: stage filter ('all' | 'code' | 'declarative')
   };
 
   static styles = css`
@@ -109,6 +110,7 @@ export class AppStore extends OrbitComponent {
     this.installing = false;
     this.query = '';
     this.activeCat = 'all';
+    this.activeStage = 'all';
     this.adminError = '';
     this.toast = '';
     this.catalogueMissing = false;
@@ -137,6 +139,9 @@ export class AppStore extends OrbitComponent {
       .filter((f) => f && field(f, 'slug'))
       // §1.4.1 role_min: the /store list only shows features accessible to this role (UX)
       .filter((f) => roleAllowed(field(f, 'role_min') ?? 'all', role))
+      // in_menu=false = infrastructure tool (e.g. the store itself, reached via the
+      // header icon): it must NOT be listed inside the store (that would be recursive).
+      .filter((f) => (field(f, 'in_menu') ?? true) !== false)
       .sort((a, b) => ((field(a, 'menu_order') ?? 0) - (field(b, 'menu_order') ?? 0)) || field(a, 'slug').localeCompare(field(b, 'slug'))); // same order as the menu (§1.9.1)
     await appStore.whenReady();
     this.prefsObj = appStore.getPrefs();
@@ -153,7 +158,7 @@ export class AppStore extends OrbitComponent {
     super.disconnectedCallback();
   }
 
-  isEmpty() { return this.objects.length === 0 && !this.catalogueMissing; }
+  isEmpty() { return (this.objects ?? []).length === 0 && !this.catalogueMissing; }
 
   isAdmin() { return appStore.isAdmin(); }
 
@@ -328,8 +333,9 @@ export class AppStore extends OrbitComponent {
     try { configSchema = JSON.parse(this.adminValues.config_schema); }
     catch { this.adminError = 'config_schema: invalid JSON'; return; }
     const patch = {
-      title_i18n: { en: this.adminValues.title_en },
-      description_i18n: { en: this.adminValues.desc_en },
+      // preserve the other locales (only `en` is edited in the admin modal)
+      title_i18n: { ...(field(feature, 'title_i18n') ?? {}), en: this.adminValues.title_en },
+      description_i18n: { ...(field(feature, 'description_i18n') ?? {}), en: this.adminValues.desc_en },
       icon: this.adminValues.icon || 'extension',
       category: this.adminValues.category || null, // 021_features_category.sql
       menu_order: Number(this.adminValues.menu_order) || 0,
@@ -411,17 +417,25 @@ export class AppStore extends OrbitComponent {
   // app.features.category — migration 021) with text search; the menu
   // (<app-menu>) stays flat.
   renderToolbar() {
-    const cats = ['all', ...new Set(this.objects.map((f) => String(field(f, 'category') ?? '')))];
+    const objects = this.objects ?? [];
+    const cats = ['all', ...new Set(objects.map((f) => String(field(f, 'category') ?? '')))];
     return html`
       <div class="toolbar">
         <input class="search" type="search" placeholder="Search features…" .value=${this.query}
                @input=${(e) => { this.query = e.target.value; }}>
         <div class="chips">
           ${cats.map((c) => {
-            const n = c === 'all' ? this.objects.length : this.objects.filter((f) => String(field(f, 'category') ?? '') === c).length;
+            const n = c === 'all' ? objects.length : objects.filter((f) => String(field(f, 'category') ?? '') === c).length;
             const label = c === 'all' ? `All (${n})` : `${categoryLabel(c, this.locale)} (${n})`;
             return html`<button class="chip ${this.activeCat === c ? 'on' : ''}" aria-pressed=${this.activeCat === c}
               @click=${() => { this.activeCat = c; }}>${label}</button>`;
+          })}
+        </div>
+        <div class="chips stages">
+          ${['all', 'code', 'declarative'].map((s) => {
+            const n = s === 'all' ? objects.length : objects.filter((f) => String(field(f, 'stage') ?? 'code') === s).length;
+            return html`<button class="chip stage-chip ${this.activeStage === s ? 'on' : ''}" aria-pressed=${this.activeStage === s}
+              @click=${() => { this.activeStage = s; }}>${s === 'all' ? `All stages (${n})` : `${s} (${n})`}</button>`;
           })}
         </div>
       </div>`;
@@ -435,7 +449,8 @@ export class AppStore extends OrbitComponent {
     const entry = installedEntry(this.prefsObj, slug);
     const configured = isConfigured(entry.config, schema); // §1.9.11
     const distant = isDistant(f);                    // v2: cdn_url + tag in the catalogue
-    const installed = isInstalled(f, this.prefsObj);  // CA-A5
+    const stage = String(field(f, 'stage') ?? 'code'); // v0.5: two-stage discriminant
+    const installed = isInstalled(f, this.prefsObj);  // CA-A5 (+ declarative hash recorded)
     const upgrade = upgradeAvailable(f, this.prefsObj); // CA-A6
     return html`
       <li class="card feature">
@@ -443,6 +458,7 @@ export class AppStore extends OrbitComponent {
           ${unsafeHTML(iconSvg(field(f, 'icon') || 'extension'))}
           <h3>${titleOf(f, this.locale)}</h3>
           ${configured ? html`<span class="badge configured">configured</span>` : ''}
+          ${stage === 'declarative' ? html`<span class="badge stage-decl">declarative</span>` : ''}
           ${distant && installed ? html`<span class="badge installed" title="actually installed version (fingerprint verified)">installed v${entry.installed_version ?? ''}</span>` : ''}
           ${distant && !installed && !enabled ? html`<span class="badge remote" title="remote component (CDN) — downloaded and fingerprint-verified on activation">remote · not installed</span>` : ''}
           ${upgrade ? html`<span class="badge upgrade" title="the catalogue offers a newer version">update available: v${field(f, 'version')}</span>` : ''}
@@ -480,8 +496,9 @@ export class AppStore extends OrbitComponent {
       ${this.toast ? html`<div class="toast" role="status">${this.toast}</div>` : ''}
       ${this.renderToolbar()}
       ${(() => {
-        const visible = this.objects.filter((f) =>
+        const visible = (this.objects ?? []).filter((f) =>
           (this.activeCat === 'all' || String(field(f, 'category') ?? '') === this.activeCat) &&
+          (this.activeStage === 'all' || String(field(f, 'stage') ?? 'code') === this.activeStage) &&
           featureMatchesQuery(f, this.query, this.locale));
         const groups = groupByCategory(visible, this.locale);
         if (!groups.length) return html`<p class="desc">No feature matches.</p>`;
