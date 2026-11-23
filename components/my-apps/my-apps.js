@@ -19,17 +19,17 @@ import { unwrapComponentResource, componentKind, componentLabel, componentEditLi
 
 const STR = {
   en: {
-    title: 'My apps', newUi: '+ New UI component', newAi: '+ New AI component',
+    title: 'My apps', new: '+ New component',
     colName: 'Component', colType: 'Type', colSource: 'Source', colVersion: 'Version', colActions: '',
     typeUi: 'UI', typeAi: 'AI', edit: 'Edit', empty: 'No component yet.',
-    hint: 'An AI component is published here, then embedded as an AI block inside a UI component.',
+    hint: 'Add an "AI block" inside a component to create and use an AI component.',
     loadError: 'Cannot read /components/ (published components container).',
   },
   fr: {
-    title: 'Mes apps', newUi: '+ Nouveau composant UI', newAi: '+ Nouveau composant IA',
+    title: 'Mes apps', new: '+ Nouveau composant',
     colName: 'Composant', colType: 'Type', colSource: 'Source', colVersion: 'Version', colActions: '',
     typeUi: 'UI', typeAi: 'IA', edit: 'Modifier', empty: 'Aucun composant pour l\'instant.',
-    hint: 'Un composant IA se publie ici, puis s\'intègre comme bloc IA dans un composant UI.',
+    hint: 'Ajoutez un « bloc IA » dans un composant pour créer et utiliser un composant IA.',
     loadError: 'Lecture de /components/ impossible (conteneur des composants publiés).',
   },
 };
@@ -78,9 +78,11 @@ export class MyApps extends OrbitComponent {
   // not by the OrbitComponent default "no items" which would hide the add button.
   isEmpty() { return false; }
 
-  _new(target) {
-    if (target === 'ai') this.navigate('ai-editor', '/ai-editor');
-    else this.navigate('ui-editor', '/editor');
+  // Single creation entry point: a new component is a UI component (/editor).
+  // AI components are created from the "AI block" panel inside the UI editor
+  // (deep link /ai-editor), published in /components/, then referenced by AI blocks.
+  _new() {
+    this.navigate('ui-editor', '/editor');
   }
 
   _edit(entry) {
@@ -93,8 +95,7 @@ export class MyApps extends OrbitComponent {
       <div class="head">
         <h1>${this.t('title')}</h1>
         <div class="new">
-          <button class="secondary" data-kind="ui" @click=${() => this._new('ui')}>${this.t('newUi')}</button>
-          <button data-kind="ai" @click=${() => this._new('ai')}>${this.t('newAi')}</button>
+          <button data-kind="ui" @click=${() => this._new()}>${this.t('new')}</button>
         </div>
       </div>
       <p class="hint">${this.t('hint')}</p>

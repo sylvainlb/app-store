@@ -81,14 +81,12 @@ test('<my-apps> lists /components/ with UI/IA badges, source and version', async
   el.remove();
 });
 
-test('<my-apps> explicit "new" buttons dispatch to /editor or /ai-editor; "edit" to ?component=<iri>', async () => {
+test('<my-apps> single "New component" button -> /editor; "edit" to ?component=<iri>', async () => {
   navEvents = [];
   const el = await mount();
   const btns = el.shadowRoot.querySelectorAll('.head .new button');
-  assert.equal(btns.length, 2, 'two explicit buttons: new UI component / new AI component');
-  btns[1].click(); // AI
-  assert.deepEqual(navEvents.at(-1), { route: 'ai-editor', resource: '/ai-editor', query: null });
-  btns[0].click(); // UI
+  assert.equal(btns.length, 1, 'a single creation button (AI components are created from the AI block panel of the UI editor)');
+  btns[0].click();
   assert.deepEqual(navEvents.at(-1), { route: 'ui-editor', resource: '/editor', query: null });
   // edit per row: find the AI row's Edit button
   const rows = [...el.shadowRoot.querySelectorAll('tbody tr')];
@@ -114,11 +112,11 @@ test('<my-apps> empty state when /components/ has no component — but the "New 
   assert.ok(el.shadowRoot.querySelector('.empty'), 'empty state shown');
   assert.ok(!/créez|create/i.test(el.shadowRoot.querySelector('.empty').textContent), 'empty message is not phrased as a clickable action');
   const btns = el.shadowRoot.querySelectorAll('.head .new button');
-  assert.equal(btns.length, 2, 'both "new" buttons still rendered when the list is empty');
+  assert.equal(btns.length, 1, 'the "new component" button still rendered when the list is empty');
   assert.ok(el.shadowRoot.querySelector('.head h1'), 'hub header rendered');
-  assert.ok(el.shadowRoot.querySelector('.hint'), 'UI/IA relationship hint shown');
+  assert.ok(el.shadowRoot.querySelector('.hint'), 'AI-block hint shown');
   btns[0].click();
-  assert.deepEqual(navEvents.at(-1), { route: 'ui-editor', resource: '/editor', query: null }, 'new UI component reachable from the empty state');
+  assert.deepEqual(navEvents.at(-1), { route: 'ui-editor', resource: '/editor', query: null }, 'new component reachable from the empty state');
   el.remove();
   window.sibStore.fetchAuthn = saved;
 });

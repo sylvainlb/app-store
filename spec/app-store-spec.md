@@ -173,8 +173,9 @@ Ratified decisions (proposals in `app-ui-editor/spec/j8-ratification.md`, accept
   and AI (`cmp:AiComponent`) together — one row each with a type badge, label (EN pivot),
   source and version. Resources are the envelope `{ slug, sri, document }`; the hub unwraps
   them (`unwrapComponentResource`).
-- **New component**: one gesture with a UI/IA choice → `/editor` (new UI component) or
-  `/ai-editor` (new AI component).
+- **New component**: a single button → `/editor`. An AI component is created from the
+  **AI block panel inside the UI editor** (« + New AI component » opens the `/ai-editor`
+  deep link; once published in `/components/` it appears in the AI block picker).
 - **Edit per row**: deep link `/editor?component=<iri>` or `/ai-editor?component=<iri>`
   (`componentEditLink`). The editor reopens the published document as a **derived draft**
   (F7.3 / C8 of the chantier 3 spec): the published version is never edited in place; for
