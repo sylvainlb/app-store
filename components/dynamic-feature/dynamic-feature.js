@@ -61,7 +61,8 @@ export class DynamicFeature extends LitElement {
         const documentIri = getField(feature, 'document_iri');
         const res = await fetch(documentIri);
         if (!res.ok) throw new Error(`component document not found: ${documentIri} (${res.status})`);
-        const actual = await documentHash(await res.json());
+        const body = await res.json();
+        const actual = await documentHash(body.document ?? body); // /components/<slug> envelope
         if (actual !== getField(feature, 'sri')) {
           throw new Error(`document hash mismatch for ${this.slug} — rendering refused`);
         }
