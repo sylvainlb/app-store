@@ -71,7 +71,10 @@ export class MyApps extends OrbitComponent {
     return idx;
   }
 
-  isEmpty() { return this.entries.length === 0; }
+  // Always render the hub chrome (header + "New component" gesture) — even with zero
+  // components, the empty list is rendered INSIDE renderContent (localized message),
+  // not by the OrbitComponent default "no items" which would hide the add button.
+  isEmpty() { return false; }
 
   _new(target) {
     if (target === 'ai') this.navigate('ai-editor', '/ai-editor');

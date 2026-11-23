@@ -106,13 +106,20 @@ test('<my-apps> "new" dispatches to /editor or /ai-editor; "edit" to ?component=
   el.remove();
 });
 
-test('<my-apps> empty state when /components/ has no component', async () => {
+test('<my-apps> empty state when /components/ has no component — but the "New component" gesture stays visible', async () => {
   const saved = window.sibStore.fetchAuthn;
   window.sibStore.fetchAuthn = async (url) => String(url) === '/components/'
     ? { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ 'ldp:contains': [] }) }
     : { ok: false, status: 404, headers: { get: () => null }, json: async () => ({}) };
+  navEvents = [];
   const el = await mount();
   assert.ok(el.shadowRoot.querySelector('.empty'), 'empty state shown');
+  const sel = el.shadowRoot.querySelector('#new-kind');
+  assert.ok(sel, '"New component" select still rendered when the list is empty');
+  assert.ok(el.shadowRoot.querySelector('.head h1'), 'hub header rendered');
+  sel.value = 'ui';
+  sel.dispatchEvent(new window.Event('change'));
+  assert.deepEqual(navEvents.at(-1), { route: 'ui-editor', resource: '/editor', query: null }, 'new UI component reachable from the empty state');
   el.remove();
   window.sibStore.fetchAuthn = saved;
 });
