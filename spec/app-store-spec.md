@@ -4,8 +4,9 @@ Reusable component allowing a FAP/Startin'blox application to offer a **catalogu
 features** that the user enables or not, with **per-feature configuration**, and a
 **menu generated dynamically** from the user configuration.
 
-- **Version**: 0.5 — document in **two parts**: Part 1 = v1 (to implement, details
-  settled in §1.9), Part 2 = v2 (specified, not a priority). **v0.5 (J8, chantier 3
+- **Version**: 0.6 — document in **two parts**: Part 1 = v1 (to implement, details
+  settled in §1.9), Part 2 = v2 (specified, not a priority). **v0.6**: "Mes apps" hub
+  (§1.4.4). **v0.5 (J8, chantier 3
   `app-ui-component-editor` ratified)**: two-stage store — adds the `stage` discriminant
   column and the declarative-stage catalogue line (§1.4.3), the `/components/` container
   and `POST /features/` (§1.4.1). The code stage is byte-identical to v0.4 (CA-A8).
@@ -160,6 +161,25 @@ Ratified decisions (proposals in `app-ui-editor/spec/j8-ratification.md`, accept
   container is loaded in one read; sort/filter/pagination are client-side).
 - **Publication right**: v1 = `admin` only (the business editor prepares, the admin publishes via
   `POST /features/`); delegation to a business role is a v2 option.
+
+### 1.4.4 "Mes apps" hub (v0.6 — chantiers 3 + 4/5)
+
+- **Entry point is the list, not an editor**: the account-menu entry "Mes apps" opens
+  `/my-apps` (`<my-apps>` component of this package, host `orbit.json` route `menu:false` —
+  not a sidebar item). The editors `/editor` (chantier 3) and `/ai-editor` (chantier 4)
+  remain deep links.
+- **Content**: the user's own components published in `/components/` (declarative stage),
+  UI (`cmp:ListComponent` / `cmp:DetailComponent` / `cmp:FormComponent` / `cmp:AiBlockComponent`)
+  and AI (`cmp:AiComponent`) together — one row each with a type badge, label (EN pivot),
+  source and version. Resources are the envelope `{ slug, sri, document }`; the hub unwraps
+  them (`unwrapComponentResource`).
+- **New component**: one gesture with a UI/IA choice → `/editor` (new UI component) or
+  `/ai-editor` (new AI component).
+- **Edit per row**: deep link `/editor?component=<iri>` or `/ai-editor?component=<iri>`
+  (`componentEditLink`). The editor reopens the published document as a **derived draft**
+  (F7.3 / C8 of the chantier 3 spec): the published version is never edited in place; for
+  AI components the test sample is not carried over — a new sample must be run before
+  republication (annexe D of the chantier 4/5 spec).
 
 ### 1.4.2 Preferences — `app.prefs` (one row per user)
 | Column | Type | Role |

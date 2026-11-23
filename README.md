@@ -1,10 +1,12 @@
 # @facis/app-store — v1
 
 Catalogue of **toggleable features** for a FAP/Startin'blox app:
-`<app-store>` (list + toggles + configuration) and `<app-menu>` (menu generated
-from the preferences), plus the **SQL model** on the FAP-LDP server side.
+`<app-store>` (list + toggles + configuration), `<app-menu>` (menu generated
+from the preferences), `<my-apps>` ("Mes apps" hub — v0.6 §1.4.4: list of the
+components published in `/components/`, UI + AI, with create/edit dispatch to
+`/editor` and `/ai-editor`), plus the **SQL model** on the FAP-LDP server side.
 
-Spec: `spec/app-store-spec.md` (v0.4, Part 1 = v1). Independent repository,
+Spec: `spec/app-store-spec.md` (v0.6, Part 1 = v1). Independent repository,
 installable in any FAP/SIB app.
 
 ## Installation in an app (v1)

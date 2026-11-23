@@ -368,3 +368,52 @@ export function featureMatchesQuery(f, query, locale = 'en') {
     .join(' ').toLowerCase();
   return hay.includes(q);
 }
+
+// ---------------------------------------------------------------------------
+// "Mes apps" hub (route /my-apps) — the user's OWN components published in the
+// /components/ container (declarative stage of the app store, chantier 3 J12),
+// UI and AI together (chantiers 3 + 4/5). The hub lists them and dispatches to
+// the right editor; /editor and /ai-editor stay as deep links.
+
+// Unwrap a /components/<slug> resource into { iri, slug, sri, doc }. The stored
+// resource is the envelope { slug, sri, document } (chantier 3 F6); a raw
+// component document is also accepted (tests, fixtures).
+export function unwrapComponentResource(res) {
+  if (!res || typeof res !== 'object') return null;
+  const doc = res.document && typeof res.document === 'object' ? res.document : res;
+  const types = doc['@type'] ?? res['@type'];
+  if (!types) return null;
+  return {
+    iri: res['@id'] ?? doc['@id'] ?? null,
+    slug: res.slug ?? (typeof doc['@id'] === 'string' ? doc['@id'].split('/').filter(Boolean).pop() : null),
+    sri: res.sri ?? null,
+    doc,
+  };
+}
+
+// 'ai' for cmp:AiComponent (chantier 4/5), 'ui' for the UI primitives (chantier 3
+// R1.6), null when the document is not a published component.
+export function componentKind(doc) {
+  const t = doc?.['@type'];
+  if (t === 'cmp:AiComponent') return 'ai';
+  if (['cmp:ListComponent', 'cmp:DetailComponent', 'cmp:FormComponent', 'cmp:AiBlockComponent'].includes(t)) return 'ui';
+  return null;
+}
+
+// Localized label of a component document (R1.3: pivot en, locales otherwise).
+export function componentLabel(doc, locale = 'en') {
+  const t = doc?.['cmp:label'] ?? {};
+  if (typeof t === 'string') return t;
+  return t[locale] ?? t.en ?? t.fr ?? doc?.['@id'] ?? '';
+}
+
+// Deep link reopening a published component in its editor as a derived draft
+// (F7.3 / C8): UI → /editor?component=<iri>, AI → /ai-editor?component=<iri>.
+export function componentEditLink(entry) {
+  const kind = componentKind(entry?.doc);
+  if (!kind || !entry.iri) return null;
+  const q = `?component=${encodeURIComponent(entry.iri)}`;
+  return kind === 'ai'
+    ? { route: 'ai-editor', resource: `/ai-editor${q}` }
+    : { route: 'ui-editor', resource: `/editor${q}` };
+}
