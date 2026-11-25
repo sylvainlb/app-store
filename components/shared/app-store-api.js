@@ -267,4 +267,17 @@ export const appStore = {
 if (typeof window !== 'undefined') {
   window.appStore = window.appStore ?? appStore;
 }
-export default appStore;
+// The singleton MUST be shared across bundles: feature bundles (features-dist/*.js)
+// embed their own copy of this module, but the shell configures/refreshes only
+// window.appStore. A bare `export default appStore` would give feature components
+// an unconfigured copy (empty catalogue/prefs → features render "no items").
+// The Proxy always delegates to the live window.appStore when present.
+const singleton = new Proxy(appStore, {
+  get(_t, prop) {
+    const w = typeof window !== 'undefined' ? window.appStore : undefined;
+    const target = w ?? appStore;
+    const v = target[prop];
+    return typeof v === 'function' ? v.bind(target) : v;
+  },
+});
+export default singleton;

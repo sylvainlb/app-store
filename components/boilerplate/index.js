@@ -26,14 +26,32 @@ export async function getJson(url) {
 
 // Resolves the members of an LDP container (which only lists @id) into full
 // resources via getJson(@id). Already-complete members (fixtures) unchanged.
-export async function resolveMembers(data) {
+// Resolves the members of an LDP container (which only lists @id) into full
+// resources via getJson(@id). Already-complete members (fixtures) unchanged.
+// Concurrency is CAPPED (worker pool): a raw Promise.all over hundreds of members
+// (gold hourly containers have 700–4000 rows) makes the browser abort most
+// requests (ERR_INSUFFICIENT_RESOURCES / ERR_ABORTED) — the catch then returns
+// bare {@id} stubs and the component renders an empty list ("no items").
+export async function resolveMembers(data, { concurrency = 12 } = {}) {
   const members = data?.['ldp:contains'] ?? (Array.isArray(data) ? data : []);
-  return Promise.all(members.map(async (m) => {
-    if (m && typeof m === 'object' && m['@id'] && Object.keys(m).filter((k) => k !== '@id' && k !== '@type').length === 0) {
-      try { return await getJson(m['@id']); } catch { return m; }
+  const out = new Array(members.length);
+  let next = 0;
+  const isStub = (m) => m && typeof m === 'object' && m['@id']
+    && Object.keys(m).filter((k) => k !== '@id' && k !== '@type').length === 0;
+  async function worker() {
+    while (next < members.length) {
+      const i = next++;
+      const m = members[i];
+      if (isStub(m)) {
+        try { out[i] = await getJson(m['@id']); } catch { out[i] = m; }
+      } else {
+        out[i] = m;
+      }
     }
-    return m;
-  }));
+  }
+  const n = Math.max(1, Math.min(concurrency, members.length));
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return out;
 }
 
 export const sharedStyles = css`    :host {
