@@ -375,18 +375,35 @@ export function featureMatchesQuery(f, query, locale = 'en') {
 // UI and AI together (workstreams 3 + 4/5). The hub lists them and dispatches to
 // the right editor; /editor and /ai-editor stay as deep links.
 
+// fap-ldp serves resource fields with the table prefix (app_user_components:slug,
+// app_user_components:document…); fixtures and tests use plain keys. Accept both.
+function fieldOf(res, local) {
+  if (res[local] !== undefined) return res[local];
+  for (const k of Object.keys(res)) {
+    if (k.endsWith(':' + local)) return res[k];
+  }
+  return undefined;
+}
+
 // Unwrap a /components/<slug> resource into { iri, slug, sri, doc }. The stored
-// resource is the enbikepe { slug, sri, document } (workstream 3 F6); a raw
-// component document is also accepted (tests, fixtures).
+// resource is the envelope { slug, sri, document } (workstream 3 F6), served with
+// prefixed keys by fap-ldp; a raw component document is also accepted (tests,
+// fixtures).
 export function unwrapComponentResource(res) {
   if (!res || typeof res !== 'object') return null;
-  const doc = res.document && typeof res.document === 'object' ? res.document : res;
+  let doc = fieldOf(res, 'document');
+  if (typeof doc === 'string') {
+    try { doc = JSON.parse(doc); } catch { doc = null; }
+  }
+  if (!doc || typeof doc !== 'object') doc = res;
   const types = doc['@type'] ?? res['@type'];
   if (!types) return null;
+  const slug = fieldOf(res, 'slug')
+    ?? (typeof doc['@id'] === 'string' ? doc['@id'].split('/').filter(Boolean).pop() : null);
   return {
     iri: res['@id'] ?? doc['@id'] ?? null,
-    slug: res.slug ?? (typeof doc['@id'] === 'string' ? doc['@id'].split('/').filter(Boolean).pop() : null),
-    sri: res.sri ?? null,
+    slug,
+    sri: fieldOf(res, 'sri') ?? null,
     doc,
   };
 }

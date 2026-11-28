@@ -31,11 +31,12 @@ const STR = {
     hint: 'Add an "AI block" inside a component to create and use an AI component.',
     loadError: 'Cannot read /components/ (published components container).',
     colLevel: 'Level', badgeLocal: 'local', badgePublished: 'published',
-    publish: 'Publish', unpublish: 'Unpublish', busy: '…',
+    publish: 'Publish', unpublish: 'Unpublish', busy: '…', delete: 'Delete',
+    confirmDelete: 'Delete this component permanently (all copies)?',
     integrityError: 'Integrity check failed (sha384 mismatch) — not published.',
     actionError: 'Action failed',
   },
-  fr: { title: 'Mes apps', new: '+ Nouveau composant', colName: 'Composant', colType: 'Type', colSource: 'Source', colVersion: 'Version', colActions: '', typeUi: 'UI', typeAi: 'IA', edit: 'Modifier', empty: 'Aucun composant pour l\'instant.', hint: 'Ajoutez un « bloc IA » dans un composant pour créer et utiliser un composant IA.', loadError: 'Lecture de /components/ impossible (conteneur des composants publiés).', colLevel: 'Niveau', badgeLocal: 'local', badgePublished: 'publié', publish: 'Publier', unpublish: 'Dépublier', busy: '…', integrityError: 'Vérification d\'intégrité échouée (sha384) — non publié.', actionError: 'Action échouée' },
+  fr: { title: 'Mes apps', new: '+ Nouveau composant', colName: 'Composant', colType: 'Type', colSource: 'Source', colVersion: 'Version', colActions: '', typeUi: 'UI', typeAi: 'IA', edit: 'Modifier', empty: 'Aucun composant pour l\'instant.', hint: 'Ajoutez un « bloc IA » dans un composant pour créer et utiliser un composant IA.', loadError: 'Lecture de /components/ impossible (conteneur des composants publiés).', colLevel: 'Niveau', badgeLocal: 'local', badgePublished: 'publié', publish: 'Publier', unpublish: 'Dépublier', busy: '…', delete: 'Supprimer', confirmDelete: 'Supprimer définitivement ce composant (toutes les copies) ?', integrityError: 'Vérification d\'intégrité échouée (sha384) — non publié.', actionError: 'Action échouée' },
 };
 
 export class MyApps extends OrbitComponent {
@@ -61,6 +62,8 @@ export class MyApps extends OrbitComponent {
     .badge.published { background: #dcfce7; color: #166534; }
     .action-error { color: #b91c1c; font-size: .78rem; margin-bottom: 8px; }
     td.actions { white-space: nowrap; text-align: right; }
+    td.actions button.danger { color: #b91c1c; border-color: #fecaca; }
+    td.actions button.danger:hover { background: #fef2f2; }
   `;
 
   constructor() {
@@ -154,6 +157,39 @@ export class MyApps extends OrbitComponent {
     }
   }
 
+  // "Delete": remove EVERY copy of the component — the local one on the
+  // participant's pod (/users/<pk>/components/<slug>) and the published one
+  // (/components/<slug> + its /features/ catalogue line). Unlike "Unpublish",
+  // nothing is kept.
+  async _delete(entry) {
+    if (typeof window.confirm === 'function' && !window.confirm(this.t('confirmDelete'))) return;
+    this._actionError = null;
+    this._busy = entry.slug;
+    try {
+      const slug = entry.slug;
+      const levels = entry.levels ?? [entry.level ?? 'published'];
+      if (levels.includes('local')) {
+        const localPath = this._localPath();
+        if (localPath) {
+          const res = await this._fetch()(`${localPath}${slug}`, { method: 'DELETE' });
+          if (!res.ok && res.status !== 404) throw new Error(`DELETE ${localPath}${slug} → ${res.status}`);
+        }
+      }
+      if (levels.includes('published')) {
+        let res = await this._fetch()(`/components/${slug}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 404) throw new Error(`DELETE /components/${slug} → ${res.status}`);
+        res = await this._fetch()(`/features/${slug}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 404) throw new Error(`DELETE /features/${slug} → ${res.status}`);
+      }
+      await this.load();
+      this.requestUpdate();
+    } catch (e) {
+      this._actionError = `${this.t('actionError')}: ${e?.message ?? e}`;
+    } finally {
+      this._busy = null;
+    }
+  }
+
   // Always render the hub chrome (header + "New component" gesture) — even with zero
   // components, the empty list is rendered INSIDE renderContent (localized message),
   // not by the OrbitComponent default "no items" which would hide the add button.
@@ -203,6 +239,7 @@ export class MyApps extends OrbitComponent {
                 <button class="secondary" @click=${() => this._edit(e)}>${this.t('edit')}</button>
                 ${levels.includes('local') ? html`<button class="secondary" ?disabled=${this._busy === e.slug} @click=${() => this._publish(e)}>${this._busy === e.slug ? this.t('busy') : this.t('publish')}</button>` : null}
                 ${levels.includes('published') ? html`<button class="secondary" ?disabled=${this._busy === e.slug} @click=${() => this._unpublish(e)}>${this._busy === e.slug ? this.t('busy') : this.t('unpublish')}</button>` : null}
+                <button class="danger" ?disabled=${this._busy === e.slug} @click=${() => this._delete(e)}>${this._busy === e.slug ? this.t('busy') : this.t('delete')}</button>
               </td>
             </tr>`;
           })}

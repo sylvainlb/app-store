@@ -68,6 +68,25 @@ test('logic: unwrapComponentResource / componentKind / componentLabel / componen
     { route: 'ai-editor', resource: `/ai-editor?component=${encodeURIComponent('/components/maintenance-summary')}` });
 });
 
+test('logic: unwrapComponentResource accepts fap-ldp prefixed keys (app_user_components:*)', () => {
+  // fap-ldp serves resource fields as <table>:<col>; the envelope must still unwrap
+  // so the row keeps its cmp:* @type and is not filtered out of /my-apps.
+  const prefixed = {
+    '@id': '/users/1/components/my-list',
+    '@type': ['ldp:Resource', 'app_user_components:User_components'],
+    'app_user_components:slug': 'my-list',
+    'app_user_components:sri': 'sha384-ccc',
+    'app_user_components:document': UI_DOC,
+  };
+  const e = unwrapComponentResource(prefixed);
+  assert.equal(e.slug, 'my-list');
+  assert.equal(e.sri, 'sha384-ccc');
+  assert.equal(componentKind(e.doc), 'ui');
+  // document stored as a JSON string is parsed too
+  const asString = { ...prefixed, 'app_user_components:document': JSON.stringify(UI_DOC) };
+  assert.equal(componentKind(unwrapComponentResource(asString).doc), 'ui');
+});
+
 test('<my-apps> lists /components/ with UI/IA badges, source and version', async () => {
   const el = await mount();
   const rows = el.shadowRoot.querySelectorAll('tbody tr');
@@ -210,4 +229,48 @@ test('<my-apps> v0.7: local + published aggregated with badges; Publish = sha384
   el.remove();
   window.sibStore.fetchAuthn = savedFetch;
   delete window.appStore;
+});
+
+test('<my-apps> Delete removes every copy (local IRI + /components/ + /features/), confirm can cancel', async () => {
+  const calls = [];
+  const DATA = {
+    '/users/3/components/': { 'ldp:contains': [{ '@id': '/users/3/components/my-view' }] },
+    '/users/3/components/my-view': { '@id': '/users/3/components/my-view', slug: 'my-view', sri: 'sha384-x', document: LOCAL_DOC },
+    '/components/': { 'ldp:contains': [{ '@id': '/components/ticket-list' }] },
+    '/components/ticket-list': { '@id': '/components/ticket-list', slug: 'ticket-list', sri: 'sha384-aaa', document: UI_DOC },
+  };
+  const savedFetch = window.sibStore.fetchAuthn;
+  window.sibStore.fetchAuthn = async (url, init = {}) => {
+    const u = String(url); calls.push([init.method ?? 'GET', u]);
+    if (init.method && init.method !== 'GET') return { ok: true, status: 200, json: async () => ({}) };
+    if (DATA[u]) return { ok: true, status: 200, headers: { get: () => null }, json: async () => DATA[u] };
+    return { ok: false, status: 404, headers: { get: () => null }, json: async () => ({}) };
+  };
+  window.appStore = { mePrefsIri: () => '/prefs/3' };
+  window.confirm = () => true;
+  const el = await mount();
+  await new Promise((r) => setTimeout(r, 10));
+  await el.updateComplete;
+  // Delete button rendered on every row
+  const rows = [...el.shadowRoot.querySelectorAll('tbody tr')];
+  assert.ok(rows.every((r) => r.querySelector('button.danger')), 'a Delete button per row');
+  // local-only row → DELETE on the pod IRI only
+  calls.length = 0;
+  await el._delete(el.entries.find((e) => e.slug === 'my-view'));
+  assert.ok(calls.some((c) => c[0] === 'DELETE' && c[1] === '/users/3/components/my-view'), 'local copy deleted');
+  assert.ok(!calls.some((c) => c[0] === 'DELETE' && c[1].startsWith('/components/')), 'no store DELETE for a local-only row');
+  // published row → DELETE /components/<slug> + /features/<slug>
+  calls.length = 0;
+  await el._delete(el.entries.find((e) => e.slug === 'ticket-list'));
+  assert.ok(calls.some((c) => c[0] === 'DELETE' && c[1] === '/components/ticket-list'));
+  assert.ok(calls.some((c) => c[0] === 'DELETE' && c[1] === '/features/ticket-list'));
+  // confirm refused → nothing deleted
+  window.confirm = () => false;
+  calls.length = 0;
+  await el._delete(el.entries[0]);
+  assert.ok(!calls.some((c) => c[0] === 'DELETE'), 'cancelled confirm → no DELETE');
+  el.remove();
+  window.sibStore.fetchAuthn = savedFetch;
+  delete window.appStore;
+  delete window.confirm;
 });
