@@ -256,7 +256,7 @@ export function installedEntry(prefsObj, slug) {
 
 // v0.5 — two-stage store (spec v0.5 §1.4.3, J8): stage discriminant on the catalogue line.
 // 'code' (default, the 12 existing features) = distant SRI bundle, unchanged.
-// 'declarative' = JSON-LD document interpreted by <cmp-runtime> (chantier 3).
+// 'declarative' = JSON-LD document interpreted by <cmp-runtime> (workstream 3).
 export function isDeclarative(feature) {
   return get(feature, 'stage') === 'declarative';
 }
@@ -371,12 +371,12 @@ export function featureMatchesQuery(f, query, locale = 'en') {
 
 // ---------------------------------------------------------------------------
 // "Mes apps" hub (route /my-apps) — the user's OWN components published in the
-// /components/ container (declarative stage of the app store, chantier 3 J12),
-// UI and AI together (chantiers 3 + 4/5). The hub lists them and dispatches to
+// /components/ container (declarative stage of the app store, workstream 3 J12),
+// UI and AI together (workstreams 3 + 4/5). The hub lists them and dispatches to
 // the right editor; /editor and /ai-editor stay as deep links.
 
 // Unwrap a /components/<slug> resource into { iri, slug, sri, doc }. The stored
-// resource is the envelope { slug, sri, document } (chantier 3 F6); a raw
+// resource is the enbikepe { slug, sri, document } (workstream 3 F6); a raw
 // component document is also accepted (tests, fixtures).
 export function unwrapComponentResource(res) {
   if (!res || typeof res !== 'object') return null;
@@ -391,7 +391,7 @@ export function unwrapComponentResource(res) {
   };
 }
 
-// 'ai' for cmp:AiComponent (chantier 4/5), 'ui' for the UI primitives (chantier 3
+// 'ai' for cmp:AiComponent (workstream 4/5), 'ui' for the UI primitives (workstream 3
 // R1.6), null when the document is not a published component.
 export function componentKind(doc) {
   const t = doc?.['@type'];
@@ -416,4 +416,91 @@ export function componentEditLink(entry) {
   return kind === 'ai'
     ? { route: 'ai-editor', resource: `/ai-editor${q}` }
     : { route: 'ui-editor', resource: `/editor${q}` };
+}
+
+// ---------------------------------------------------------------------------
+// v0.7 §1.4.4 — three-level storage (workstream 3 rev 9, F1.1/F1.2):
+//   (0) draft = localStorage (never listed here) — (1) local-saved =
+//   /users/<pk>/components/ on the participant's pod (badge `local`) —
+//   (2) published = app store /components/ + POST /features/ (badge `published`).
+
+// Private components container path of the current participant, from the webid
+// (https://<pod>/users/<pk>) or from the prefs IRI (/prefs/<pk>).
+export function localComponentsPath(webidOrPrefsIri, podUrl) {
+  if (!webidOrPrefsIri) return null;
+  const s = String(webidOrPrefsIri);
+  const pk = s.match(/\/users\/(\d+)/)?.[1] ?? s.match(/\/prefs\/(\d+)/)?.[1];
+  return pk ? `/users/${pk}/components/` : null;
+}
+
+// Level badge of an entry: explicit `level`, else derived from the IRI.
+export function entryLevel(entry) {
+  if (entry?.level) return entry.level;
+  return typeof entry?.iri === 'string' && /\/users\/\d+\/components\//.test(entry.iri) ? 'local' : 'published';
+}
+
+// Aggregate the two levels into rows: one row per slug, `levels` = ['local'] /
+// ['published'] / both. Published IRI wins for the edit link (it is the canonical one).
+export function mergeLevels(localEntries = [], publishedEntries = []) {
+  const bySlug = new Map();
+  for (const e of localEntries) {
+    if (!e?.slug) continue;
+    bySlug.set(e.slug, { ...e, levels: ['local'] });
+  }
+  for (const e of publishedEntries) {
+    if (!e?.slug) continue;
+    const prev = bySlug.get(e.slug);
+    bySlug.set(e.slug, prev ? { ...e, iri: e.iri ?? prev.iri, levels: [...new Set([...prev.levels, 'published'])] } : { ...e, levels: ['published'] });
+  }
+  return [...bySlug.values()];
+}
+
+// sha384 (base64) of the canonical JSON, @id excluded — same hash as the J8/F6 integrity hash.
+export function canonicalJsonLite(v) {
+  if (Array.isArray(v)) return '[' + v.map(canonicalJsonLite).join(',') + ']';
+  if (v && typeof v === 'object') {
+    return '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canonicalJsonLite(v[k])).join(',') + '}';
+  }
+  return JSON.stringify(v);
+}
+export function hashableDocLite(doc) {
+  const { '@id': _omit, ...rest } = doc ?? {};
+  return rest;
+}
+export async function sha384B64(text, subtle = globalThis.crypto?.subtle) {
+  if (!subtle) throw new Error('WebCrypto subtle unavailable');
+  const buf = await subtle.digest('SHA-384', new TextEncoder().encode(text));
+  // same base64 as app-ui-editor publish.js (btoa over the raw bytes)
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+
+// F1.2 — before transferring local → store, re-verify the sha384 integrity hash.
+export async function verifyIntegrity(entry, subtle) {
+  if (!entry?.sri || !entry?.doc) return false;
+  const h = await sha384B64(canonicalJsonLite(hashableDocLite(entry.doc)), subtle);
+  const stored = String(entry.sri).replace(/^sha384-/, ''); // accept both SRI-prefixed and raw base64
+  return h === stored;
+}
+
+// Catalogue line (POST /features/, admin) for a declarative-stage component —
+// mirrors app-ui-editor preparePublication (J8, spec app-store v0.5 §1.4.3).
+export function catalogueLineFor(entry, { route, roleMin = 'admin', category = 'tools' } = {}) {
+  const doc = entry.doc ?? {};
+  const slug = entry.slug;
+  const documentIri = entry.iri ?? `/components/${slug}`;
+  return {
+    slug,
+    route: route ?? `/c/${slug}`,
+    stage: 'declarative',
+    document_iri: documentIri,
+    sri: entry.sri,
+    title_i18n: doc['cmp:label'] ?? { en: slug },
+    description_i18n: { en: `${String(doc['@type'] ?? '').replace('cmp:', '')} on ${doc['cmp:source'] ?? ''}` },
+    role_min: roleMin,
+    category,
+    menu_order: 100,
+    default_enabled: false,
+    in_menu: false,
+    component: 'cmp-runtime',
+  };
 }

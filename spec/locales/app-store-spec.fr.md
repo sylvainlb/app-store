@@ -132,6 +132,38 @@ PUT/PATCH merge-patch pour modifier. RLS : `auth.can` sur l'IRI → un utilisate
 (prefs + ACL, §1.9.4). À l'ajout d'une feature par l'admin : trigger sur INSERT `app.features` qui
 injecte la clé par défaut dans toutes les prefs existantes.
 
+### 1.4.4 Hub « Mes apps » (v0.7 — chantier 3 rev 9 ; v0.6 = chantiers 3 + 4/5) — traduction de la copie maîtresse EN
+
+- **Point d'entrée = la liste, pas un éditeur** : l'entrée « Mes apps » du menu compte ouvre `/my-apps`
+  (composant `<my-apps>` de ce package, route `orbit.json` `menu:false`). Les éditeurs `/editor`
+  (chantier 3) et `/ai-editor` (chantier 4) restent des liens profonds.
+- **Trois niveaux de stockage** (chantier 3 rev 9 §8 F1.1/F1.2 — ne pas perdre ce lien) :
+  - **brouillon** : `localStorage` seul, éphémère, jamais listé ici ;
+  - **sauvegardé local** : conteneur **privé du participant sur son propre pod**, `/users/<pk>/components/`
+    (ACL owner-only ; webid `https://<pod>/users/<pk>`), écrit par l'action « Enregistrer » de l'éditeur —
+    listé ici avec le badge `local` ;
+  - **publié** : poussé vers l'app store (conteneur `/components/` + ligne catalogue `POST /features/`) —
+    badge `published`. En data space fédéré (E8, `fap-ldp-ext-specs.md`), `/components/` vit sur
+    l'installation de fédération dédiée ; le hub lit d'abord le conteneur local et agrège les deux.
+- **Contenu** : lignes = composants sauvegardés localement + publiés (UI `cmp:ListComponent` /
+  `cmp:DetailComponent` / `cmp:FormComponent` / `cmp:AiBlockComponent`, et IA `cmp:AiComponent`),
+  avec badge de type, badge `local`/`published`, libellé (pivot EN), source et version.
+- **Nouveau composant** : un seul bouton → `/editor` (composant IA : depuis le panneau « bloc IA »,
+  « + New AI component » → lien profond `/ai-editor`).
+- **Édition par ligne** : lien profond `/editor?component=<iri>` ou `/ai-editor?component=<iri>` ;
+  le publié est rouvert comme **brouillon dérivé** (F7.3/C8 chantier 3), jamais édité en place.
+- **Publier / Dépublier par ligne** (v0.7) : « Publier » transfère le document sauvegardé vers l'app store
+  (re-vérification schéma + chemins contre le contrat + sha384, entrée catalogue `POST /features/`,
+  droit admin en v1) ; « Dépublier » retire la ligne catalogue et la ressource `/components/`, la copie
+  locale est conservée.
+- **État d'implémentation (v0.7 — livrée, vérifiée code)** : conteneur local `/users/<pk>/components/`
+  (`localComponentsPath`), badges `local`/`published` (`mergeLevels`) et actions Publier/Dépublier
+  implémentés dans `my-apps.js` (+ `components/shared/logic.js`) ; TCK `tck/my-apps.test.js` au vert.
+  L'extension registre `tables[]` + `GET /shapes/<table>` (chantier 3 rev 8) est désormais servie par
+  `ext/shacl` (`tablesFromFragment`/`registryOf`/`shapeOf`, TCK `registry.test.mjs` au vert) —
+  cf. `spec/app-shape-editor.md` rev 4.4. Références croisées : `spec/app-ui-component-editor` rev 11/12,
+  `spec/app-shape-editor.md` rev 4.2–4.4.
+
 ## 1.5 Contrat LDP exposé (v1)
 
 - `GET /features/` → catalogue (conteneur, `ldp:contains` = slugs) ; `GET /features/<slug>` → fiche.

@@ -4,9 +4,12 @@ Reusable component allowing a FAP/Startin'blox application to offer a **catalogu
 features** that the user enables or not, with **per-feature configuration**, and a
 **menu generated dynamically** from the user configuration.
 
-- **Version**: 0.6 — document in **two parts**: Part 1 = v1 (to implement, details
-  settled in §1.9), Part 2 = v2 (specified, not a priority). **v0.6**: "Mes apps" hub
-  (§1.4.4). **v0.5 (J8, chantier 3
+- **Version**: 0.7 — document in **two parts**: Part 1 = v1 (to implement, details
+  settled in §1.9), Part 2 = v2 (specified, not a priority). **v0.7**: three-level storage
+  for declarative components (draft / local-saved / published) and "Mes apps" hub reading
+  the participant's local container first (§1.4.4; workstream 3 rev 9,
+  `spec/app-ui-component-editor`). **v0.6**: "Mes apps" hub
+  (§1.4.4). **v0.5 (J8, workstream 3
   `app-ui-component-editor` ratified)**: two-stage store — adds the `stage` discriminant
   column and the declarative-stage catalogue line (§1.4.3), the `/components/` container
   and `POST /features/` (§1.4.1). The code stage is byte-identical to v0.4 (CA-A8).
@@ -109,7 +112,7 @@ in the data space).
 | `config_schema` | jsonb | meta-schema §1.9.6 |
 | `default_enabled` | bool | default state (also used if the key is missing from prefs) |
 | `category` | text NULL | **store section** (migration `021_features_category.sql`): `supervision` \\| `operations` \\| `energy` \\| `compliance` \\| `tools` (seeded values; any other value = section named as-is; NULL = « Other »). Organizes `<app-store>` into sections + filters (§1.6.2); **no effect on the menu** (stays flat) nor on security (ACL/PDP). Modifiable by the admin via PATCH `/features/<slug>` |
-| `stage` | text NOT NULL DEFAULT 'code' CHECK (stage IN ('code','declarative')) | **v0.5 — two-stage discriminant** (migration `022_features_stage.sql`, J8). `code` = distant SRI bundle (Part 2, unchanged); `declarative` = JSON-LD component document interpreted by the runtime (chantier 3). Existing rows keep `code` by default — zero regression (CA-A8). Exposed in LDP as `app_features:stage` |
+| `stage` | text NOT NULL DEFAULT 'code' CHECK (stage IN ('code','declarative')) | **v0.5 — two-stage discriminant** (migration `022_features_stage.sql`, J8). `code` = distant SRI bundle (Part 2, unchanged); `declarative` = JSON-LD component document interpreted by the runtime (workstream 3). Existing rows keep `code` by default — zero regression (CA-A8). Exposed in LDP as `app_features:stage` |
 | `document_iri` | text NULL | **v0.5 — declarative stage only**: IRI of the pinned, versioned component document (ratified J8: dedicated column, not `config_schema`). NULL on code stage. Exposed as `app_features:document_iri` |
 
 LDP: container `https://<pod>/features/`, resources `/features/<slug>` — **custom**
@@ -117,7 +120,7 @@ LDP: container `https://<pod>/features/`, resources `/features/<slug>` — **cus
 placeholder onto its column: `pkWhere = <param> = $n`); no PEP change, covered by CA-A7.
 In v1 no `POST /features/` (admin = metadata only, §1.9.8): the catalogue is populated by the seed.
 **v0.5 (J8)**: `POST /features/` is opened to `admin` for **declarative-stage rows only**
-(publication channel of chantier 3, F1): body = the catalogue line of §1.4.3 (route validated
+(publication channel of workstream 3, F1): body = the catalogue line of §1.4.3 (route validated
 unique and reserved, `document_iri`, `sri` = sha384 of the canonical document content — see
 §1.4.3). Code-stage rows are still seed-only / PATCH-metadata-only.
 Read: all authenticated users of the pod; write: `admin`.
@@ -125,12 +128,12 @@ Read: all authenticated users of the pod; write: `admin`.
 stopped at step 1 of the PDP, container `published=false`); `role:admin` in `write` on
 `/features/`.
 
-### 1.4.3 Two-stage store (v0.5 — J8, chantier 3 `app-ui-component-editor`)
+### 1.4.3 Two-stage store (v0.5 — J8, workstream 3 `app-ui-component-editor`)
 
 Ratified decisions (proposals in `app-ui-editor/spec/j8-ratification.md`, accepted as-is):
 
 - **Discriminant**: `app.features.stage` (`code` | `declarative`), default `code` — the 12 existing
-  features are untouched (CA-A8). Store UI sections = `category` × `stage` (F4 of the chantier 3 spec).
+  features are untouched (CA-A8). Store UI sections = `category` × `stage` (F4 of the workstream 3 spec).
 - **Declarative catalogue line (F6)**: `stage='declarative'`, `slug`, dedicated `route` (validated
   unique/reserved), `document_iri` (dedicated column), `sri` = **sha384 of the canonical JSON-LD
   document content, top-level `@id` excluded** (identity is carried by the versioned resource IRI;
@@ -156,31 +159,53 @@ Ratified decisions (proposals in `app-ui-editor/spec/j8-ratification.md`, accept
   route table the `app.features` rows with `stage='declarative'` installed in the current prefs
   (route + `role_min` from the catalogue); existing guards and mounting then apply unchanged.
   Additive: code-stage routes stay in `orbit.json`, untouched.
-- **Volumetry threshold (R4.1 of the chantier 3 spec)**: ratified at **1000 resources** per
+- **Volumetry threshold (R4.1 of the workstream 3 spec)**: ratified at **1000 resources** per
   container — beyond that, the runtime shows a volumetry warning (LDP-only reading: the whole
   container is loaded in one read; sort/filter/pagination are client-side).
 - **Publication right**: v1 = `admin` only (the business editor prepares, the admin publishes via
   `POST /features/`); delegation to a business role is a v2 option.
 
-### 1.4.4 "Mes apps" hub (v0.6 — chantiers 3 + 4/5)
+### 1.4.4 "Mes apps" hub (v0.7 — workstream 3 rev 9; v0.6 was workstreams 3 + 4/5)
 
 - **Entry point is the list, not an editor**: the account-menu entry "Mes apps" opens
   `/my-apps` (`<my-apps>` component of this package, host `orbit.json` route `menu:false` —
-  not a sidebar item). The editors `/editor` (chantier 3) and `/ai-editor` (chantier 4)
+  not a sidebar item). The editors `/editor` (workstream 3) and `/ai-editor` (workstream 4)
   remain deep links.
-- **Content**: the user's own components published in `/components/` (declarative stage),
-  UI (`cmp:ListComponent` / `cmp:DetailComponent` / `cmp:FormComponent` / `cmp:AiBlockComponent`)
-  and AI (`cmp:AiComponent`) together — one row each with a type badge, label (EN pivot),
-  source and version. Resources are the envelope `{ slug, sri, document }`; the hub unwraps
-  them (`unwrapComponentResource`).
+- **Three storage levels** (workstream 3 rev 9, §8 F1.1/F1.2 — cross-ref, do not duplicate):
+  - **draft**: `localStorage` only, ephemeral, never listed here (R2.2 of workstream 2 conventions);
+  - **local-saved**: the participant's **private container on their own pod**, `/users/<pk>/components/`
+    (ACL owner-only; webid `https://<pod>/users/<pk>`), written by the editor's "Save" action —
+    listed here with badge `local`;
+  - **published**: pushed to the app store — container `/components/` + catalogue line `POST /features/`
+    — badge `published`. In a federated data space (E8, `fap-ldp-ext-specs.md`), `/components/` lives
+    on the dedicated federation install; the hub still reads the local container first and aggregates both.
+- **Content**: rows = local-saved components (from `/users/<pk>/components/`) plus published ones
+  (from `/components/` when reachable — same server in mono-pod deployments). UI
+  (`cmp:ListComponent` / `cmp:DetailComponent` / `cmp:FormComponent` / `cmp:AiBlockComponent`)
+  and AI (`cmp:AiComponent`) together — one row each with a type badge, a `local`/`published` badge,
+  label (EN pivot), source and version. Published resources are the enbikepe `{ slug, sri, document }`;
+  the hub unwraps them (`unwrapComponentResource`).
 - **New component**: a single button → `/editor`. An AI component is created from the
   **AI block panel inside the UI editor** (« + New AI component » opens the `/ai-editor`
   deep link; once published in `/components/` it appears in the AI block picker).
 - **Edit per row**: deep link `/editor?component=<iri>` or `/ai-editor?component=<iri>`
   (`componentEditLink`). The editor reopens the published document as a **derived draft**
-  (F7.3 / C8 of the chantier 3 spec): the published version is never edited in place; for
+  (F7.3 / C8 of the workstream 3 spec): the published version is never edited in place; for
   AI components the test sample is not carried over — a new sample must be run before
-  republication (annexe D of the chantier 4/5 spec).
+  republication (appendix D of the workstream 4/5 spec).
+- **Publish / Unpublish per row** (v0.7): « Publish » transfers the local-saved document to the app
+  store (F1.2 workstream 3): schema + contract-path re-check (R1.2 workstream 3), sha384 integrity (F6),
+  catalogue entry `POST /features/` (admin right in v1, §1.4.1). « Unpublish » removes the catalogue
+  line and the `/components/` resource; the local copy is kept.
+- **Implementation status (v0.7 — delivered, workstream 3 rev 11)**: `my-apps.js` reads the local
+  container `/users/<pk>/components/` first, then `/components/`, aggregates by slug with the
+  `local`/`published` badges, and implements per-row Publish (sha384 re-verified → PUT/POST
+  `/components/<slug>` + `POST /features/`) / Unpublish (DELETE store copy, local kept).
+  Server side: table `app.user_components` (`container_name` → `/users/*/components/`), owner-only
+  ACL via `app_store_on_user_insert` + backfill `013_backfill_user_components_acl.sql`.
+  The registry extension `tables[]` + `GET /shapes/<table>` (workstream 3 rev 8) is served by
+  `ext/shacl` (see `spec/app-shape-editor.md` F3.6). Cross-refs: `spec/app-ui-component-editor`
+  rev 9–11, `spec/app-shape-editor.md` rev 4.2/4.3.
 
 ### 1.4.2 Preferences — `app.prefs` (one row per user)
 | Column | Type | Role |

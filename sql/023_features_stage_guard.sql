@@ -1,4 +1,4 @@
--- Chantier 3 — v0.5 §1.4.3 (J8 ratified): POST /features/ is open to admin for DECLARATIVE rows
+-- Workstream 3 — v0.5 §1.4.3 (J8 ratified): POST /features/ is open to admin for DECLARATIVE rows
 -- only. Code-stage rows (stage='code') remain seed-only / PATCH-metadata-only (v1 policy, §1.9.8).
 -- The generic LDP POST runs as the runtime `app` role; seeds and migrations run as
 -- admin/postgres at deploy time. So: reject stage='code' INSERTs coming from the runtime role.

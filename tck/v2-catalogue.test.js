@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');       // app-store/
 const ATLAS = existsSync(join(ROOT, '..', 'atlas', 'app-supervision', 'orbit.json'))
-  ? join(ROOT, '..', 'atlas')   // dépôt standalone : atlas/ est un sous-répertoire du parent
-  : join(ROOT, '..');            // layout atlas/ : app-store, app-features, app-supervision côte à côte
+  ? join(ROOT, '..', 'atlas')   // standalone repo: atlas/ is a subdirectory of the parent
+  : join(ROOT, '..');            // atlas/ layout: app-store, app-features, app-supervision side by side
 const catalogue = JSON.parse(readFileSync(join(ATLAS, 'app-features/scripts/catalogue.json'), 'utf8'));
 const slugs = Object.keys(catalogue).filter((s) => !s.startsWith('_'));
 const seedSql = readFileSync(join(ROOT, 'sql/130_features_catalogue_v2.sql'), 'utf8');

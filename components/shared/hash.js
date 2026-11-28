@@ -1,7 +1,7 @@
 // v0.5 — content hash of a declarative component document (app-store-spec v0.5 §1.4.3).
 // sha384 over the CANONICAL JSON-LD serialization, top-level @id EXCLUDED: the identity is
 // carried by the versioned resource IRI; hashing @id would change the hash at each storage
-// (decision ratified at J8, found by the chantier-3 TCK — app-ui-editor/src/publish.js).
+// (decision ratified at J8, found by the workstream-3 TCK — app-ui-editor/src/publish.js).
 // Same mechanics as the bundle SRI (sha384, base64).
 
 export function canonicalJson(value) {

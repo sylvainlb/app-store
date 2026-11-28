@@ -25,5 +25,14 @@ BEGIN
   INSERT INTO auth.acl (resource_uri, subject, modes, inherited) VALUES
     ('https://' || v_host || '/prefs/' || NEW.id::text, NEW.webid, '{read,write,control}', false),
     ('https://' || v_host || '/prefs/' || NEW.id::text, 'role:admin', '{read,write,control}', false);
+
+  -- workstream 3 rev 9 (F1.1, app-store-spec v0.7 §1.4.4): private components container
+  -- /users/<pk>/components/ (table app.user_components) — owner-only, inherited so it
+  -- covers every /users/<pk>/components/<slug> resource. Admin keeps write/control.
+  IF to_regclass('app.user_components') IS NOT NULL THEN
+    INSERT INTO auth.acl (resource_uri, subject, modes, inherited) VALUES
+      ('https://' || v_host || '/users/' || NEW.id::text || '/components/', NEW.webid, '{read,write,append,control}', true),
+      ('https://' || v_host || '/users/' || NEW.id::text || '/components/', 'role:admin', '{read,write,append,control}', true);
+  END IF;
   RETURN NEW;
 END $$;

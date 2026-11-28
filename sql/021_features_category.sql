@@ -31,6 +31,6 @@ UPDATE app.features SET category = 'compliance'
 UPDATE app.features SET category = 'tools'
   WHERE category IS NULL AND slug IN
   ('ai-assistant', 'demo_weather', 'admin', 'store',
-   'model-editor', 'model-registry', 'ui-editor', 'ai-editor', 'my-apps'); -- editors + registre + "Mes apps" hub (chantiers 2-4/5)
+   'model-editor', 'model-registry', 'ui-editor', 'ai-editor', 'my-apps'); -- editors + registre + "Mes apps" hub (workstreams 2-4/5)
 
 CREATE INDEX IF NOT EXISTS features_category_idx ON app.features (category);
